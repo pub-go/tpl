@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="static/style.css" />
+    <title>标题</title>
+</head>
+
+<body>
+    <header>
+        <h1 title="属性的标题
+可以换行">页眉</h1>
+    </header>
+
+    <div>
+        <main>
+            <!-- ${} 内是代码 -->
+            <p :text="${t('Hello, %s', name)}">Hello, World!</p>
+            <!-- /* not
+                print */ -->
+        </main>
+        <aside>
+            <section>
+                <!-- 引号内直接写的是文本，${} 里的是代码 -->
+                <h3 :text="Title (${len(items)})">标题</h3>
+                <!-- :if, :range 等关键字内是代码 -->
+                <ul :if="len(items)>0" :remove="all-but-first">
+                    <li :range="item : items" :text="Item ${item.ID}">Item 1</li>
+                    <li>Item 2</li>
+                    <li>Item 3</li>
+                </ul>
+                <p :else text="aaa" $text='t("No Content")' $text="t('No Content')" :text="${t('No Content')}"
+                    :text='${t("No Content")}'>No Content</p>
+            </section>
+        </aside>
+    </div>
+
+    <footer>
+        <t:block>
+            &copy; 2023. All rights reserved.
+        </t:block>
+    </footer>
+</body>
+
+</html>
