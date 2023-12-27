@@ -171,7 +171,11 @@ func (a Attr) Evaluate(input any) (string, error) {
 			buf.WriteString(tok.Value)
 		case CodeStart: // ${
 		case CodeValue:
-
+			result, err := exp.Evaluate(tok.Start, tok.Tree, input)
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(fmt.Sprintf("%v", result))
 		case CodeEnd: // }
 		}
 	}

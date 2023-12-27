@@ -13,5 +13,5 @@ func (p Pos) String() string {
 }
 
 func (p Pos) Add(line, column int) Pos {
-	return Pos{p.Line + line, p.Column + column}
+	return Pos{p.Line + line - 1, p.Column + column}
 }

@@ -311,7 +311,7 @@ func TestNewVisitor(t *testing.T) {
 				},
 				want:    nil,
 				wantErr: true,
-				errMsg:  ` error: returned values should be 1 or 2, got 0`,
+				errMsg:  ` error: should return 1 or 2 values, got 0`,
 			},
 			{
 				name: "call-too-many-in",
@@ -370,6 +370,36 @@ func TestNewVisitor(t *testing.T) {
 				want:    nil,
 				wantErr: true,
 				errMsg:  `function call returned error: ---error---`,
+			},
+		},
+		{ // 函数调用
+			{
+				name: "call...",
+				args: args{
+					input: `f("Hello, %v, %v",args...)`,
+					data: map[string]any{
+						"f": func(tpl string, args ...any) string {
+							return fmt.Sprintf(tpl, args...)
+						},
+						"args": []any{"Tom", 42},
+					},
+				},
+				want: "Hello, Tom, 42",
+			},
+			{
+				name: "call...err",
+				args: args{
+					input: `f("Hello, %v, %v",args...)`,
+					data: map[string]any{
+						"f": func(tpl string, args ...any) string {
+							return fmt.Sprintf(tpl, args...)
+						},
+						"args": [...]any{"Tom", 42},
+					},
+				},
+				want:    nil,
+				wantErr: true,
+				errMsg:  "only slice... can as variadic argument, got array",
 			},
 		},
 		{ // 一元表达式
@@ -902,7 +932,7 @@ func TestNewVisitor(t *testing.T) {
 					t.Errorf("ParseCode() error = %v", err)
 					return
 				}
-				v := exp.NewVisitor(exp.NewScope(tt.args.data))
+				v := exp.NewVisitor(exp.Pos{1, 1}, exp.NewScope(tt.args.data))
 				result, err := v.Evaluate(tree)
 				t.Logf("result=%T(%v), err=%v", result, result, err)
 				if (err != nil) != tt.wantErr {

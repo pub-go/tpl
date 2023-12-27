@@ -1,6 +1,7 @@
 package html
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -15,8 +16,16 @@ func TestNewHtmlTemplate(t *testing.T) {
 	if err != nil {
 		t.Errorf("add template error: %v", err)
 	}
-	err = h.Execute(os.Stdout, nil)
+	type Item struct {
+		ID int
+	}
+	err = h.Execute(os.Stdout, map[string]any{
+		"t":     func(input string, args ...any) string { return fmt.Sprintf(input, args...) },
+		"name":  "<b>Tom</b>",
+		"items": []Item{{ID: 999}, {ID: 666}},
+		"len":   func(a []Item) int { return len(a) },
+	})
 	if err != nil {
-		t.Errorf("execute template error: %v", err)
+		t.Errorf("execute template error: %+v", err)
 	}
 }

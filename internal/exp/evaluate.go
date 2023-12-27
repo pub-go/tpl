@@ -5,6 +5,6 @@ import (
 )
 
 // Evaluate 对语法树求值
-func Evaluate(tree parser.IExpressionContext, data any) (any, error) {
-	return NewVisitor(NewScope(data)).Evaluate(tree)
+func Evaluate(startPos Pos, tree parser.IExpressionContext, data any) (any, error) {
+	return NewVisitor(startPos, NewScope(data)).Evaluate(tree)
 }

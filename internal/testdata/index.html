@@ -17,17 +17,18 @@
     <div>
         <main>
             <!-- ${} 内是代码 -->
-            <p :text="${t('Hello, %s', name)}">Hello, World!</p>
+            <p :text="${t('Hello, %v', name)}">Hello, World!</p>
+            <p :raw="${t('Hello, %v', name)}">Hello, World!</p>
             <!-- /* not
                 print */ -->
         </main>
         <aside>
             <section>
                 <!-- 引号内直接写的是文本，${} 里的是代码 -->
-                <h3 :text="Title (${len(items)})">标题</h3>
+                <h3 :text="Title (${len(items)})" :title="${'Title' + name}">标题</h3>
                 <!-- :if, :range 等关键字内是代码 -->
                 <ul :if="len(items)>0" :remove="all-but-first">
-                    <li :range="item : items" :text="Item ${item.ID}">Item 1</li>
+                    <li :range="item : items" :text="Item ${items[0].ID}">Item 1</li>
                     <li>Item 2</li>
                     <li>Item 3</li>
                 </ul>

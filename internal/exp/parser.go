@@ -65,5 +65,5 @@ func (e *errorListener) SyntaxError(recognizer antlr.Recognizer,
 	msg string, ex antlr.RecognitionException) {
 	// 语法错误
 	e.errors = append(e.errors, fmt.Sprintf("[SyntaxError] %v (position: %v)",
-		msg, e.start.Add(line-1, column)))
+		msg, e.start.Add(line, column)))
 }

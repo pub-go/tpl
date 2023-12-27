@@ -14,8 +14,9 @@ func ToString(tree parser.IExpressionContext) string {
 
 func toString(level int, tree antlr.Tree) string {
 	var buf strings.Builder
-	buf.WriteString("\n")
-	buf.WriteString(strings.Repeat(" ", level))
+	buf.WriteString("\n|-")
+	buf.WriteString(strings.Repeat("-", level))
+	buf.WriteString(" ")
 
 	s := antlr.TreesGetNodeText(tree, parser.GoExpressionParserStaticData.RuleNames, nil)
 	buf.WriteString(s)
@@ -23,7 +24,5 @@ func toString(level int, tree antlr.Tree) string {
 	for _, child := range tree.GetChildren() {
 		buf.WriteString(toString(level+1, child))
 	}
-
-	buf.WriteString(strings.Repeat(" ", level))
 	return buf.String()
 }

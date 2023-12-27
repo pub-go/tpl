@@ -2,6 +2,7 @@ package html
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"strings"
 )
@@ -157,6 +158,7 @@ func (h *htmlTemplate) Execute(w io.Writer, data any) error {
 	return h.ExecuteTree(tree, w, true, true, data)
 }
 
+// ExecuteTree 执行一棵文档树
 func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, printChild bool, data any) error {
 	if tree == nil {
 		return nil
@@ -179,7 +181,7 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 
 	var buf = &strings.Builder{}
 	var nop = func() error { return nil }
-	var processChid = func() error {
+	var defaultProcessChild = func() error {
 		for _, child := range tree.Children {
 			if err := h.ExecuteTree(child, w, true, true, data); err != nil {
 				return err
@@ -187,6 +189,7 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 		}
 		return nil
 	}
+	var processChid = defaultProcessChild
 	// 开始
 	token := tree.Token
 	if token != nil { // root doc is nil
@@ -200,24 +203,32 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 			var tokenBuf = &strings.Builder{}
 			name := strings.ToLower(tag.Name)
 			if name == h.tagPrefix+"block" {
-				printToken = false // <:block> ... </:block>
+				printToken = false // <t:block> ... </t:block>
 			}
 			m := tag.AttrMap()
-			write(printToken, tokenBuf, "<"+tag.Name)
+			writeToBufIf(printToken, tokenBuf, "<"+tag.Name)
 			for _, attr := range tag.Attrs {
+				attr := attr
 				an := attr.Name
 				if strings.HasPrefix(an, h.attrPrefix) { // 指令属性
-					switch strings.TrimPrefix(an, h.attrPrefix) {
-					case "text": // 替换内容
+					cmd := strings.TrimPrefix(an, h.attrPrefix)
+					switch cmd {
+					case "text", "raw": // 替换内容
 						processChid = func() error {
 							av := attr.Value
 							if av == nil {
 								return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
 							}
-							_, err := w.Write([]byte(*av))
+							result, err := attr.Evaluate(data)
+							if err != nil {
+								return err
+							}
+							if cmd == "text" {
+								result = html.EscapeString(result)
+							}
+							_, err = w.Write([]byte(result))
 							return err
 						}
-					case "raw": // 不转义 html
 					case "if", "else", "else-if": // 条件控制
 					case "range": // 循环
 					case "remove": // 移除
@@ -240,6 +251,13 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 					case "insert": // 插入组件作为内容
 					case "replace": // 用组件替换本身
 					default: // 其他指令 替换普通属性
+						result, err := attr.Evaluate(data)
+						if err != nil {
+							return err
+						}
+						result = html.EscapeString(result)
+						result = fmt.Sprintf(" %v=%q", cmd, result)
+						writeToBufIf(printToken, tokenBuf, result)
 					}
 				} else { // 普通属性
 					if _, ok := m[h.attrPrefix+an]; !ok {
@@ -250,8 +268,8 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 					}
 				}
 			}
-			write(printToken, tokenBuf, ">")
-			write(printToken, buf, tokenBuf.String())
+			writeToBufIf(printToken, tokenBuf, ">")
+			writeToBufIf(printToken, buf, tokenBuf.String())
 		case TokenKindComment:
 			// <!-- /* */ -->
 			value := strings.TrimPrefix(token.Value, "<!--")
@@ -260,9 +278,9 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 			if strings.HasPrefix(value, "/*") && strings.HasSuffix(value, "*/") {
 				printToken = false
 			}
-			write(printToken, buf, token.Value)
+			writeToBufIf(printToken, buf, token.Value)
 		default: // text, cdata
-			write(printToken, buf, token.Value)
+			writeToBufIf(printToken, buf, token.Value)
 		}
 	}
 	if _, err := w.Write([]byte(buf.String())); err != nil {
@@ -285,7 +303,7 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 	return nil
 }
 
-func write(cond bool, buf *strings.Builder, data string) {
+func writeToBufIf(cond bool, buf *strings.Builder, data string) {
 	if cond {
 		buf.WriteString(data)
 	}

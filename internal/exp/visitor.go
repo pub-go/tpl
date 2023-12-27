@@ -19,15 +19,17 @@ var defaultScope = NewScope(map[string]any{
 
 // NewVisitor 创建一个 Visitor 实例
 // 通过 Visitor 遍历语法树来对其求值
-func NewVisitor(s Scope) *visitor {
+func NewVisitor(pos Pos, s Scope) *visitor {
 	return &visitor{
 		Scope: Combine(s, defaultScope),
+		Pos:   pos,
 	}
 }
 
 type visitor struct {
 	*parser.BaseGoExpressionVisitor
 	Scope
+	Pos
 	error
 }
 
@@ -46,6 +48,31 @@ func (v *visitor) GetError() error {
 	return v.error
 }
 
+func (v *visitor) SetError(ctx antlr.ParserRuleContext, format string, args ...any) any {
+	start := ctx.GetStart()
+	stop := ctx.GetStop()
+	line, column := start.GetLine(), start.GetColumn()
+	endLine, endColumn := stop.GetLine(), stop.GetColumn()
+	if line == endLine && column == endColumn {
+		v.error = fmt.Errorf("evaluate code failed: ```%v```, at position %v: %w",
+			ctx.GetText(), v.Pos.Add(line, column), fmt.Errorf(format, args...),
+		)
+	} else {
+		v.error = fmt.Errorf("evaluate code failed: ```%v```, from position %v to %v: %w",
+			ctx.GetText(), v.Pos.Add(line, column), v.Pos.Add(endLine, endColumn),
+			fmt.Errorf(format, args...),
+		)
+	}
+	return nil
+}
+
+func (v *visitor) SetErrorOnToken(token antlr.Token, format string, args ...any) any {
+	v.error = fmt.Errorf("evaluate code failed at position %v: %w",
+		v.Pos.Add(token.GetLine(), token.GetColumn()),
+		fmt.Errorf(format, args...),
+	)
+	return nil
+}
 func (v *visitor) VisitExpression(ctx *parser.ExpressionContext) any {
 	if v.error != nil {
 		return nil
@@ -54,33 +81,33 @@ func (v *visitor) VisitExpression(ctx *parser.ExpressionContext) any {
 	case ctx.PrimaryExpr() != nil:
 		return ctx.PrimaryExpr().Accept(v)
 	case ctx.GetUnary_op() != nil:
-		return v.unOp(ctx.GetUnary_op().GetText(), ctx.Expression(0).Accept(v))
+		return v.unOp(ctx.GetUnary_op(), ctx.Expression(0).Accept(v))
 	case ctx.GetMul_op() != nil:
 		left := ctx.Expression(0).Accept(v)
 		right := ctx.Expression(1).Accept(v)
-		return v.mulOp(ctx.GetMul_op().GetText(), left, right)
+		return v.mulOp(ctx.GetMul_op(), left, right)
 	case ctx.GetAdd_op() != nil:
 		left := ctx.Expression(0).Accept(v)
 		right := ctx.Expression(1).Accept(v)
-		return v.addOp(ctx.GetAdd_op().GetText(), left, right)
+		return v.addOp(ctx.GetAdd_op(), left, right)
 	case ctx.GetRel_op() != nil:
 		left := ctx.Expression(0).Accept(v)
 		right := ctx.Expression(1).Accept(v)
-		return v.relOp(ctx.GetRel_op().GetText(), left, right)
+		return v.relOp(ctx.GetRel_op(), left, right)
 	case ctx.LOGICAL_AND() != nil:
 		left := ctx.Expression(0).Accept(v)
 		if i, ok := IsBool(left); ok && !i {
 			return false // 短路 无需计算 right
 		}
 		right := ctx.Expression(1).Accept(v)
-		return v.logOp(ctx.LOGICAL_AND().GetText(), left, right)
+		return v.logOp(ctx.LOGICAL_AND().GetSymbol(), left, right)
 	case ctx.LOGICAL_OR() != nil:
 		left := ctx.Expression(0).Accept(v)
 		if i, ok := IsBool(left); ok && i {
 			return true // 短路 无需计算 right
 		}
 		right := ctx.Expression(1).Accept(v)
-		return v.logOp(ctx.LOGICAL_OR().GetText(), left, right)
+		return v.logOp(ctx.LOGICAL_OR().GetSymbol(), left, right)
 	case ctx.Question() != nil:
 		cond := ctx.Expression(0).Accept(v)
 		if val, ok := IsBool(cond); ok {
@@ -89,8 +116,7 @@ func (v *visitor) VisitExpression(ctx *parser.ExpressionContext) any {
 			}
 			return ctx.Expression(2).Accept(v)
 		}
-		v.error = fmt.Errorf("condition is not bool: %T(%v)", cond, cond)
-		return nil
+		return v.SetError(ctx, "condition is not bool: %T(%v)", cond, cond)
 	default:
 		panic("assert error")
 	}
@@ -113,7 +139,7 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 			field := ctx.Field().IDENTIFIER()
 			val, err := getValue(field.GetText(), primaryValue)
 			if err != nil {
-				v.error = fmt.Errorf("field `%v` not found: %w", field.GetText(), err)
+				return v.SetError(ctx, "field `%v` not found: %w", field.GetText(), err)
 			}
 			return val
 		case ctx.Index() != nil:
@@ -128,22 +154,20 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 			case string:
 				name = iv
 			default:
-				v.error = fmt.Errorf("expected index to be int or string, got %T(%v)",
+				return v.SetError(ctx, "expected index to be int or string, got %T(%v)",
 					index, index)
-				return nil
 			}
 			val, err := getValue(name, primaryValue)
 			if err != nil {
-				v.error = fmt.Errorf("index `%v` not found: %w", name, err)
+				return v.SetError(ctx, "index `%v` not found: %w", name, err)
 			}
 			return val
 		case ctx.Slice() != nil:
 			rv := reflect.ValueOf(primaryValue)
 			rk := rv.Kind()
 			if rk != reflect.Array && rk != reflect.Slice {
-				v.error = fmt.Errorf("slice operator only works on array or slice, got %T(%v)",
+				return v.SetError(ctx, "slice operator only works on array or slice, got %T(%v)",
 					primaryValue, primaryValue)
-				return nil
 			}
 			start := 0
 			end := rv.Len()
@@ -161,14 +185,14 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 			if len(sctx.AllCOLON()) == 1 {
 				if e := sctx.GetLo(); e != nil {
 					if i, err := getIntValue(e); err != nil {
-						v.error = fmt.Errorf("invalid start index: %w", err)
+						return v.SetError(ctx, "invalid start index: %w", err)
 					} else {
 						start = int(i)
 					}
 				}
 				if e := sctx.GetHi(); e != nil {
 					if i, err := getIntValue(e); err != nil {
-						v.error = fmt.Errorf("invalid end index: %w", err)
+						return v.SetError(ctx, "invalid end index: %w", err)
 					} else {
 						end = int(i)
 					}
@@ -178,21 +202,19 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 			} else {
 				if e := sctx.GetLo(); e != nil {
 					if i, err := getIntValue(e); err != nil {
-						v.error = fmt.Errorf("invalid start index: %w", err)
+						return v.SetError(ctx, "invalid start index: %w", err)
 					} else {
 						start = int(i)
 					}
 				}
 				if i, err := getIntValue(sctx.GetHi()); err != nil {
-					v.error = fmt.Errorf("invalid end index: %w", err)
-					return nil
+					return v.SetError(ctx, "invalid end index: %w", err)
 				} else {
 					end = int(i)
 				}
 				var max int
 				if i, err := getIntValue(sctx.GetCap_()); err != nil {
-					v.error = fmt.Errorf("invalid cap index: %w", err)
-					return nil
+					return v.SetError(ctx, "invalid cap index: %w", err)
 				} else {
 					max = int(i)
 				}
@@ -203,21 +225,35 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 			rv := reflect.ValueOf(primaryValue)
 			rk := rv.Kind()
 			if rk != reflect.Func {
-				v.error = fmt.Errorf("function call only works on function, got %T(%v)",
+				return v.SetError(ctx, "function call only works on function, got %T(%v)",
 					primaryValue, primaryValue)
-				return nil
 			}
 			var args any = []reflect.Value{}
 			argCtx := ctx.Arguments().ExpressionList()
 			if argCtx != nil {
 				args = argCtx.Accept(v)
+				if v.error != nil {
+					return nil
+				}
 			}
 			if in, ok := args.([]reflect.Value); ok {
+				if argCtx != nil {
+					if ctx.Arguments().ELLIPSIS() != nil {
+						last := in[len(in)-1]
+						if last.Kind() != reflect.Slice {
+							return v.SetError(ctx, "only slice... can as variadic argument, got %v", last.Kind())
+						}
+						in = in[:len(in)-1]
+						count := last.Len()
+						for i := 0; i < count; i++ {
+							in = append(in, last.Index(i))
+						}
+					}
+				}
 				out, err := callFunc(rv, in)
 				if err != nil {
-					v.error = fmt.Errorf("call function `%v` error: %w",
+					return v.SetError(ctx, "call function `%v` error: %w",
 						NameOfFunction(primaryValue), err)
-					return nil
 				}
 				rt := rv.Type()
 				switch rt.NumOut() {
@@ -228,22 +264,19 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 
 					if rt.Out(1).Implements(errorInterface) {
 						if e2 := out[1].Interface(); e2 != nil {
-							v.error = fmt.Errorf("function call returned error: %w",
+							return v.SetError(ctx, "function call returned error: %w",
 								e2.(error))
-							return nil
 						}
 						return out[0].Interface()
 					} else {
-						v.error = fmt.Errorf("error to call function `%v`: "+
+						return v.SetError(ctx, "error to call function `%v`: "+
 							"the second returned value should be error type, got %T(%v)",
 							NameOfFunction(primaryValue), v2, v2)
-						return nil
 					}
 				default:
-					v.error = fmt.Errorf("call function `%v` error: "+
-						"returned values should be 1 or 2, got %d",
+					return v.SetError(ctx, "call function `%v` error: "+
+						"should return 1 or 2 values, got %d",
 						NameOfFunction(primaryValue), len(out))
-					return nil
 				}
 			}
 			panic("[VisitPrimaryExpr] assert error when get function arguments")
@@ -266,7 +299,7 @@ func (v *visitor) VisitOperand(ctx *parser.OperandContext) any {
 		name := ctx.GetText()
 		val, err := v.Get(name)
 		if err != nil {
-			v.error = fmt.Errorf("oprand name `%v` not found: %w", name, err)
+			return v.SetError(ctx, "oprand name `%v` not found: %w", name, err)
 		}
 		return val
 	case ctx.L_PAREN() != nil:
@@ -348,7 +381,8 @@ func (v *visitor) VisitExpressionList(ctx *parser.ExpressionListContext) any {
 
 // unOp 一元表达式
 // + - ! ^ * & <-
-func (v *visitor) unOp(op string, value any) any {
+func (v *visitor) unOp(token antlr.Token, value any) any {
+	op := token.GetText()
 	switch op {
 	case "+":
 		if i, ok := IsInt(value); ok {
@@ -360,8 +394,7 @@ func (v *visitor) unOp(op string, value any) any {
 		if i, ok := IsComplex(value); ok {
 			return +i
 		}
-		v.error = fmt.Errorf("unary operator `+` only supports numbers, got %T(%v)", value, value)
-		return nil
+		return v.SetErrorOnToken(token, "unary operator `+` only supports numbers, got %T(%v)", value, value)
 	case "-":
 		if i, ok := IsInt(value); ok {
 			return -i
@@ -372,27 +405,23 @@ func (v *visitor) unOp(op string, value any) any {
 		if i, ok := IsComplex(value); ok {
 			return -i
 		}
-		v.error = fmt.Errorf("unary operator `-` only supports numbers, got %T(%v)", value, value)
-		return nil
+		return v.SetErrorOnToken(token, "unary operator `-` only supports numbers, got %T(%v)", value, value)
 	case "!":
 		if i, ok := IsBool(value); ok {
 			return !i
 		}
-		v.error = fmt.Errorf("unary operator `!` only supports bool, got %T(%v)", value, value)
-		return nil
+		return v.SetErrorOnToken(token, "unary operator `!` only supports bool, got %T(%v)", value, value)
 	case "^":
 		if i, ok := IsInt(value); ok {
 			return ^i
 		}
-		v.error = fmt.Errorf("unary operator `^` only supports int, got %T(%v)", value, value)
-		return nil
+		return v.SetErrorOnToken(token, "unary operator `^` only supports int, got %T(%v)", value, value)
 	case "*":
 		rv := reflect.ValueOf(value)
 		if rv.Kind() == reflect.Pointer {
 			return rv.Elem().Interface()
 		}
-		v.error = fmt.Errorf("unary operator `*` only supports pointer, got %T(%v)", value, value)
-		return nil
+		return v.SetErrorOnToken(token, "unary operator `*` only supports pointer, got %T(%v)", value, value)
 	case "&":
 		panic("unary oprator `&` is unsupported yet")
 	case "<-":
@@ -401,8 +430,7 @@ func (v *visitor) unOp(op string, value any) any {
 			val, _ := rv.Recv()
 			return val.Interface()
 		}
-		v.error = fmt.Errorf("unary operator `<-` only supports channel, got %T(%v)", value, value)
-		return nil
+		return v.SetErrorOnToken(token, "unary operator `<-` only supports channel, got %T(%v)", value, value)
 	default:
 		panic(fmt.Sprintf("assert error: unknown unary operator: %v", op))
 	}
@@ -489,19 +517,21 @@ func IsBool(input any) (bool, bool) {
 
 // mulOp 二元表达式 乘法等高优运算
 // * / % << >> & &^
-func (v *visitor) mulOp(op string, left, right any) any {
+func (v *visitor) mulOp(token antlr.Token, left, right any) any {
+	op := token.GetText()
 	switch op {
 	case "*", "/": // int/float/complex
-		return v.binaryOp3(op, left, right)
+		return v.binaryOp3(token, left, right)
 	case "%", "<<", ">>", "&", "&^": // int
-		return v.binaryOpInt(op, left, right)
+		return v.binaryOpInt(token, left, right)
 	default:
 		panic("assert error: unknown mul operator: " + op)
 	}
 }
 
 // binaryOp3  支持 int/float/complex 三种类型 的二元运算: - * /
-func (v *visitor) binaryOp3(op string, left, right any) any {
+func (v *visitor) binaryOp3(token antlr.Token, left, right any) any {
+	op := token.GetText()
 	if i, ok := IsInt(left); ok {
 		if j, ok := IsInt(right); ok {
 			return biOp3[int64](op, i, j)
@@ -513,9 +543,8 @@ func (v *visitor) binaryOp3(op string, left, right any) any {
 		if j, ok := IsComplex(right); ok {
 			return biOp3[complex128](op, complex(float64(i), 0), j)
 		}
-		v.error = fmt.Errorf("binary operator `%v` only supports numbers, right expression is %T(%v)",
+		return v.SetErrorOnToken(token, "binary operator `%v` only supports numbers, right expression is %T(%v)",
 			op, right, right)
-		return nil
 	}
 	if i, ok := IsFloat(left); ok {
 		if j, ok := IsInt(right); ok {
@@ -527,9 +556,8 @@ func (v *visitor) binaryOp3(op string, left, right any) any {
 		if j, ok := IsComplex(right); ok {
 			return biOp3[complex128](op, complex(i, 0), j)
 		}
-		v.error = fmt.Errorf("binary operator `%v` only supports numbers, right expression is %T(%v)",
+		return v.SetErrorOnToken(token, "binary operator `%v` only supports numbers, right expression is %T(%v)",
 			op, right, right)
-		return nil
 	}
 	if i, ok := IsComplex(left); ok {
 		if j, ok := IsInt(right); ok {
@@ -541,13 +569,11 @@ func (v *visitor) binaryOp3(op string, left, right any) any {
 		if j, ok := IsComplex(right); ok {
 			return biOp3[complex128](op, i, j)
 		}
-		v.error = fmt.Errorf("binary operator `%v` only supports numbers, right expression is %T(%v)",
+		return v.SetErrorOnToken(token, "binary operator `%v` only supports numbers, right expression is %T(%v)",
 			op, right, right)
-		return nil
 	}
-	v.error = fmt.Errorf("binary operator `%v` only supports numbers, left expression is %T(%v)",
+	return v.SetErrorOnToken(token, "binary operator `%v` only supports numbers, left expression is %T(%v)",
 		op, left, left)
-	return nil
 }
 
 // biOp3 int/float/complex 都支持的运算符 + - * /
@@ -567,15 +593,15 @@ func biOp3[T int64 | float64 | complex128](op string, left, right T) T {
 }
 
 // binaryOpInt 只支持 int 的二元运算符号: % & | ^ &^ << >>
-func (v *visitor) binaryOpInt(op string, left, right any) any {
+func (v *visitor) binaryOpInt(token antlr.Token, left, right any) any {
+	op := token.GetText()
 	if i, ok := IsInt(left); ok {
 		if j, ok := IsInt(right); ok {
 			return biOpInt(op, i, j)
 		}
 	}
-	v.error = fmt.Errorf("binary operator `%v` only supports int, got %T(%v) %v %T(%v)",
+	return v.SetErrorOnToken(token, "binary operator `%v` only supports int, got %T(%v) %v %T(%v)",
 		op, left, left, op, right, right)
-	return nil
 }
 
 func biOpInt(op string, left, right int64) int64 {
@@ -600,7 +626,8 @@ func biOpInt(op string, left, right int64) int64 {
 
 // addOp 二元表达式 加法等中优运算
 // + - | ^
-func (v *visitor) addOp(op string, left, right any) any {
+func (v *visitor) addOp(token antlr.Token, left, right any) any {
+	op := token.GetText()
 	switch op {
 	case "+":
 		i, ok1 := IsString(left)
@@ -613,16 +640,17 @@ func (v *visitor) addOp(op string, left, right any) any {
 		}
 		fallthrough
 	case "-":
-		return v.binaryOp3(op, left, right)
+		return v.binaryOp3(token, left, right)
 	case "|", "^":
-		return v.binaryOpInt(op, left, right)
+		return v.binaryOpInt(token, left, right)
 	}
 	return nil
 }
 
 // relOp 二元表达式 比较等低优运算
 // == != < <= > >=
-func (v *visitor) relOp(op string, left, right any) any {
+func (v *visitor) relOp(token antlr.Token, left, right any) any {
+	op := token.GetText()
 	switch op {
 	case "==":
 		return left == right
@@ -650,9 +678,8 @@ func (v *visitor) relOp(op string, left, right any) any {
 				return relOp3[string](op, i, j)
 			}
 		}
-		v.error = fmt.Errorf("binary operator `%v` only supports int/float/string, got %T(%v) %v %T(%v)",
+		return v.SetErrorOnToken(token, "binary operator `%v` only supports int/float/string, got %T(%v) %v %T(%v)",
 			op, left, left, op, right, right)
-		return nil
 	default:
 		panic("assert error: unknown relationship binary operator: " + op)
 	}
@@ -675,13 +702,13 @@ func relOp3[T int64 | float64 | string](op string, left, right T) bool {
 
 // logOp 二元表达式 逻辑运算
 // && ||
-func (v *visitor) logOp(op string, left, right any) any {
+func (v *visitor) logOp(token antlr.Token, left, right any) any {
+	op := token.GetText()
 	i, ok1 := IsBool(left)
 	j, ok2 := IsBool(right)
 	if !ok1 || !ok2 {
-		v.error = fmt.Errorf("logic binary operator `%v` only supports bool, got %T(%v) %v %T(%v)",
+		return v.SetErrorOnToken(token, "logic binary operator `%v` only supports bool, got %T(%v) %v %T(%v)",
 			op, left, left, op, right, right)
-		return nil
 	}
 	switch op {
 	case "&&":
