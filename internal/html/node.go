@@ -7,3 +7,10 @@ type Node struct {
 	Parent   *Node   // 父节点
 	Children []*Node // 子节点
 }
+
+func (n *Node) IsBlankText() bool {
+	if n.Token != nil {
+		return n.Token.IsBlankText()
+	}
+	return false
+}

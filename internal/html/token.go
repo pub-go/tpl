@@ -2,6 +2,7 @@ package html
 
 import (
 	"fmt"
+	"strings"
 
 	"code.gopub.tech/tpl/internal/exp"
 )
@@ -15,6 +16,13 @@ type Token struct {
 	Start Pos       // 开始位置
 	End   Pos       // 结束位置
 	Tag   *Tag      // 如果是标签
+}
+
+func (t *Token) IsBlankText() bool {
+	if t.Kind == TokenKindText {
+		return strings.TrimSpace(t.Value) == ""
+	}
+	return false
 }
 
 func (t *Token) String() string {

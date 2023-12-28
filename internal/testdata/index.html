@@ -28,15 +28,16 @@
                 <h3 :text="Title (${len(items)})" :title="${'Title' + name}">标题</h3>
                 <!-- :if, :range 等关键字内是代码 -->
                 <ul :if="len(items)>0" :remove="all-but-first">
-                    <li :range="item : items" :text="Item ${items[0].ID}">Item 1</li>
+                    <li :range="idx, item : items" :text="Item ${idx} ${item.ID}">Item 1</li>
                     <li>Item 2</li>
                     <li>Item 3</li>
                 </ul>
+                <p :else>No Items</p>
                 <section :remove="all">not show</section>
                 <section :remove='body'>not show</section>
                 <section :remove='tag'>show</section>
-                <p :else text="aaa" $text='t("No Content")' $text="t('No Content')" :text="${t('No Content')}"
-                    :text='${t("No Content")}'>No Content</p>
+                <p :else text="aaa" $text='t("No Content")' $text="t('No Content')" :text="${t('No Content1')}"
+                    :text='${t("No Content2")}'>XXXX</p>
             </section>
         </aside>
     </div>
