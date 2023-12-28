@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"reflect"
 	"strings"
 
 	"code.gopub.tech/tpl/internal/exp"
@@ -243,6 +244,11 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 	if name == h.tagPrefix+"block" {
 		opt.noPrintToken = true // <t:block> ... </t:block>
 	}
+	hasRangeAttr := h.hasRangeAttr(tag)
+	if hasRangeAttr {
+		opt.noPrintToken = true
+		// <li :range="">xxx<li> 不输出 tag 在处理 range 时再输出
+	}
 	var tagBuf = &strings.Builder{}
 	writeToBuf(opt, tagBuf, "<"+tag.Name)
 
@@ -253,7 +259,18 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 		if strings.HasPrefix(an, h.attrPrefix) { // 指令属性
 			cmd := strings.TrimPrefix(an, h.attrPrefix)
 			switch cmd {
+			case "if", "else", "else-if": // 条件控制
+			case "range": // 循环
+				if err := h.processRange(node, attr, tokenBuf, data, opt); err != nil {
+					return err
+				}
+			case "remove": // 移除
+				h.processRemoveAttr(node, attr, data, opt)
 			case "text", "raw": // 替换内容
+				if hasRangeAttr {
+					opt.processChild = notPrintChild
+					continue
+				}
 				opt.processChild = func(w io.Writer) error {
 					av := attr.Value
 					if av == nil {
@@ -269,75 +286,6 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 					_, err = w.Write([]byte(result))
 					return err
 				}
-			case "if", "else", "else-if": // 条件控制
-			case "range": // 循环
-			/*
-				av := attr.Value
-					if av == nil {
-						return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
-					}
-					attrValue := *av
-					if attrValue == "" {
-						break
-					}
-					attrValue = strings.TrimPrefix(attrValue, "'")
-					attrValue = strings.TrimSuffix(attrValue, "'")
-					attrValue = strings.TrimPrefix(attrValue, "\"")
-					attrValue = strings.TrimSuffix(attrValue, "\"")
-					indexName, itemName, arrayName, err := extractRange(attrValue)
-					if err != nil {
-						return err
-					}
-					scope := exp.WithDefaultScope(data)
-					array, err := scope.Get(arrayName)
-					if err != nil {
-						return err
-					}
-					rv := reflect.ValueOf(array)
-					rk := rv.Kind()
-					var getRange = func() (any, any, bool) {
-						return nil, nil, false
-					}
-					switch rk {
-					case reflect.Array, reflect.Slice, reflect.String:
-						i := 0
-						count := rv.Len()
-						getRange = func() (any, any, bool) {
-							var v any
-							if i < count {
-								v = rv.Index(i).Interface()
-								i++
-								return i, v, true
-							}
-							return 0, nil, false
-						}
-					case reflect.Map:
-						iter := rv.MapRange()
-						getRange = func() (any, any, bool) {
-							if iter.Next() {
-								return iter.Key().Interface(),
-									iter.Value().Interface(), true
-							}
-							return nil, nil, false
-						}
-					}
-					for {
-						i, n, ok := getRange()
-						if !ok {
-							break
-						}
-						childScope := exp.Combine(exp.NewScope(map[string]any{
-							indexName: i,
-							itemName:  n,
-						}), scope)
-
-						*av = ""
-						if err := h.ExecuteTree(tree, tokenBuf, printToken, printChild, childScope); err != nil {
-							return err
-						}
-					}*/
-			case "remove": // 移除
-				h.processRemoveAttr(node, attr, data, opt)
 			case "define": // 定义可复用组件
 			case "insert": // 插入组件作为内容
 			case "replace": // 用组件替换本身
@@ -365,6 +313,14 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 	return nil
 }
 
+func (h *htmlTemplate) hasRangeAttr(tag *Tag) bool {
+	m := tag.AttrMap()
+	if attr, ok := m[h.attrPrefix+"range"]; ok {
+		return attr.Value != nil && *attr.Value != ""
+	}
+	return false
+}
+
 // processRemoveAttr 处理 remove 属性
 func (h *htmlTemplate) processRemoveAttr(node *Node, attr *Attr, data exp.Scope, opt *executeOption) {
 	var av string
@@ -382,35 +338,38 @@ func (h *htmlTemplate) processRemoveAttr(node *Node, attr *Attr, data exp.Scope,
 	case `"all-but-first"`, `'all-but-first'`:
 		// 只输出第一个tag，如果之后有空白文本也输出
 		opt.processChild = func(w io.Writer) error {
+			var tagIndex int
 			var blankTextBefore, tagNode, blankTextAfter *Node
-			for _, child := range node.Children {
-				child := child
-				if token := child.Token; token != nil {
-					isBlankText := token.Kind == TokenKindText && strings.TrimSpace(token.Value) == ""
-					if tagNode == nil && blankTextBefore == nil && isBlankText {
-						blankTextBefore = child
-					}
-					if tagNode == nil && token.Kind == TokenKindTag {
-						tagNode = child
-					}
-					if tagNode != nil && blankTextAfter == nil && isBlankText {
-						blankTextAfter = child
-					}
+			for i, child := range node.Children {
+				if token := child.Token; token != nil && token.Kind == TokenKindTag {
+					tagIndex = i
+					tagNode = child
+					break
 				}
 			}
-			if tagNode != nil {
-				if blankTextBefore != nil {
-					if err := h.ExecuteTree(blankTextBefore, w, data, nil); err != nil {
-						return err
-					}
+			if tagIndex > 0 {
+				child := node.Children[0] // 第一个子节点看是否是空白文本
+				if child.IsBlankText() {
+					blankTextBefore = child
 				}
-				if err := h.ExecuteTree(tagNode, w, data, nil); err != nil {
+			}
+			if count := len(node.Children); count > 0 {
+				child := node.Children[count-1] // 最后一个子节点看是否空白文本
+				if child.IsBlankText() {
+					blankTextAfter = child
+				}
+			}
+			if blankTextBefore != nil {
+				if err := h.ExecuteTree(blankTextBefore, w, data, nil); err != nil {
 					return err
 				}
-				if blankTextAfter != nil {
-					if err := h.ExecuteTree(blankTextAfter, w, data, nil); err != nil {
-						return err
-					}
+			}
+			if err := h.ExecuteTree(tagNode, w, data, nil); err != nil {
+				return err
+			}
+			if blankTextAfter != nil {
+				if err := h.ExecuteTree(blankTextAfter, w, data, nil); err != nil {
+					return err
 				}
 			}
 			return nil
@@ -423,4 +382,137 @@ func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {
 	if !opt.noPrintToken {
 		buf.WriteString(data)
 	}
+}
+
+func (h *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
+	an := attr.Name
+	av := attr.Value
+	if av == nil {
+		return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
+	}
+	attrValue := *av
+	if attrValue == "" {
+		return nil
+	}
+	attrValue = strings.TrimPrefix(attrValue, "'")
+	attrValue = strings.TrimSuffix(attrValue, "'")
+	attrValue = strings.TrimPrefix(attrValue, "\"")
+	attrValue = strings.TrimSuffix(attrValue, "\"")
+	indexName, itemName, objName, err := extractRange(attrValue)
+	if err != nil {
+		return err
+	}
+	scope := exp.WithDefaultScope(data)
+	obj, err := scope.Get(objName)
+	if err != nil {
+		return err
+	}
+	rv := reflect.ValueOf(obj)
+	rk := rv.Kind()
+	var getRange = func() (any, any, bool) {
+		return nil, nil, false
+	}
+	switch rk {
+	case reflect.Array, reflect.Slice, reflect.String:
+		i := 0
+		count := rv.Len()
+		getRange = func() (any, any, bool) {
+			var v any
+			if i < count {
+				v = rv.Index(i).Interface()
+				i++
+				return i, v, true
+			}
+			return 0, nil, false
+		}
+	case reflect.Map:
+		iter := rv.MapRange()
+		getRange = func() (any, any, bool) {
+			if iter.Next() {
+				return iter.Key().Interface(),
+					iter.Value().Interface(), true
+			}
+			return nil, nil, false
+		}
+	default:
+		return fmt.Errorf("`%vrange` only supports array, slice, string or map, got %v: %v",
+			h.attrPrefix, rk, objName)
+	}
+
+	// <ul>
+	//   <li :range>当前 node 是这个</li>
+	//   <li>
+	// </ul>
+	// 处理 range 的 li 项目时，找到并输出 </li> 后的空白字符
+	var nextSiblingBlankTextNode *Node
+	var nodeIndex int // 当前 node 在父节点的位置
+	if node.Parent != nil {
+		for i, child := range node.Parent.Children {
+			if child == node {
+				nodeIndex = i
+				break
+			}
+		}
+
+		if nodeIndex < len(node.Parent.Children)-1 {
+			next := node.Parent.Children[nodeIndex+1]
+			if next.IsBlankText() {
+				nextSiblingBlankTextNode = next
+			}
+		}
+	}
+
+	*av = "" // 标记 range 指令已经执行 下面 for 循环执行 node 时就会忽略 range 指令了
+	count := 0
+	for {
+		i, n, ok := getRange()
+		if !ok {
+			break
+		}
+		childScope := exp.Combine(exp.NewScope(map[string]any{
+			indexName: i,
+			itemName:  n,
+		}), scope)
+		if count > 0 {
+			// <ul :remove='all-but-first'>
+			//   <li :range>repat</li>
+			//   <li>xxx</li>
+			// </ul>
+			// 多个 li 【之间】才需要空白。最后一个项目之后的空白，会在下一个 node 处理
+			if nextSiblingBlankTextNode != nil {
+				if err := h.ExecuteTree(nextSiblingBlankTextNode, tokenBuf, childScope, nil); err != nil {
+					return err
+				}
+			}
+		}
+		if err := h.ExecuteTree(node, tokenBuf, childScope, nil); err != nil {
+			return err
+		}
+		count++
+
+	}
+	return nil
+}
+
+// extractRange 解析循环表达式语法 index, item : items
+func extractRange(s string) (
+	idxName string, itemName string, objName string, err error,
+) {
+	s = strings.TrimSpace(s)
+	i := strings.Index(s, ":")
+	if i < 0 { // 无 idxName, itemName :range="items"
+		objName = s
+		return
+	}
+	objName = strings.TrimSpace(s[i+1:])
+	s = s[:i]
+	i = strings.Index(s, ",")
+	if i < 0 { // 无 itemName :range="key : items"
+		idxName = strings.TrimSpace(s)
+		return
+	}
+	// :range="idxName, itemName : items"
+	idxName = strings.TrimSpace(s[:i])
+	itemName = strings.TrimSpace(s[i+1:])
+	return
 }
