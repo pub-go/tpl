@@ -56,7 +56,7 @@ func TestHtmlScanner_GetAllTokens(t *testing.T) {
 					End:   html.Pos{1, 16},
 					Tag: &html.Tag{
 						Name: "!DOCTYPE",
-						Attrs: []html.Attr{
+						Attrs: []*html.Attr{
 							{
 								Name:      "html",
 								NameStart: html.Pos{1, 11},
@@ -78,7 +78,7 @@ func TestHtmlScanner_GetAllTokens(t *testing.T) {
 					End:   html.Pos{2, 19},
 					Tag: &html.Tag{
 						Name: "html",
-						Attrs: []html.Attr{
+						Attrs: []*html.Attr{
 							{
 								Name:       "lang",
 								NameStart:  html.Pos{2, 7},
@@ -234,7 +234,7 @@ func TestHtmlScanner_GetAllTokens(t *testing.T) {
 					End:   html.Pos{1, 29},
 					Tag: &html.Tag{
 						Name: "input",
-						Attrs: []html.Attr{
+						Attrs: []*html.Attr{
 							{Name: "checked", NameStart: html.Pos{1, 8}, NameEnd: html.Pos{1, 15}},
 							{Name: "disabled", NameStart: html.Pos{1, 16}, NameEnd: html.Pos{1, 24}},
 							{Name: "k", NameStart: html.Pos{1, 25}, NameEnd: html.Pos{1, 26},

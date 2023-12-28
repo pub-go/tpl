@@ -32,6 +32,9 @@
                     <li>Item 2</li>
                     <li>Item 3</li>
                 </ul>
+                <section :remove="all">not show</section>
+                <section :remove='body'>not show</section>
+                <section :remove='tag'>show</section>
                 <p :else text="aaa" $text='t("No Content")' $text="t('No Content')" :text="${t('No Content')}"
                     :text='${t("No Content")}'>No Content</p>
             </section>

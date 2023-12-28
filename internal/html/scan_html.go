@@ -9,6 +9,9 @@ import (
 	"unicode"
 )
 
+// ErrUnexpectedEOF 非预期的 EOF. 读取标签过程中遇到 EOF 时会返回
+var ErrUnexpectedEOF = errors.New("unecpected EOF")
+
 // NewHtmlScanner 新建一个词法解析器实例
 // 默认设置的文本 tag 有：["script", "style", "textarea", "title"]
 func NewHtmlScanner(r io.Reader) *HtmlScanner {
@@ -361,7 +364,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 				attrName.WriteRune(' ')
 			} else if ch == '>' {
 				name := strings.TrimSuffix(attrName.String(), " ")
-				attr := Attr{
+				attr := &Attr{
 					Name:      name,
 					NameStart: attrNameStart,
 					NameEnd:   attrNameEnd,
@@ -375,7 +378,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 			} else {
 				name := attrName.String()
 				if strings.HasSuffix(name, " ") {
-					attr := Attr{
+					attr := &Attr{
 						Name:      strings.TrimSuffix(name, " "),
 						NameStart: attrNameStart,
 						NameEnd:   attrNameEnd,
@@ -414,7 +417,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 				}
 				if finish {
 					value := attrValue.String()
-					attr := Attr{
+					attr := &Attr{
 						Name:       strings.TrimSuffix(attrName.String(), " "),
 						NameStart:  attrNameStart,
 						NameEnd:    attrNameEnd,
@@ -422,7 +425,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 						ValueStart: attrValueStart,
 						ValueEnd:   attrValueEnd,
 					}
-					if err := t.compileAttr(&attr); err != nil {
+					if err := t.compileAttr(attr); err != nil {
 						return nil, t.Err("compile attr failed: %v. cause: %w", attr, err)
 					}
 					tag.Attrs = append(tag.Attrs, attr)

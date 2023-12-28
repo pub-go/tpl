@@ -5,6 +5,8 @@ import (
 	"html"
 	"io"
 	"strings"
+
+	"code.gopub.tech/tpl/internal/exp"
 )
 
 // htmlTemplate HTML 模板
@@ -155,146 +157,73 @@ func (h *htmlTemplate) Execute(w io.Writer, data any) error {
 	if tree == nil {
 		return fmt.Errorf("template not found: %q", h.current)
 	}
-	return h.ExecuteTree(tree, w, true, true, data)
+	return h.ExecuteTree(tree, w, exp.NewScope(data), nil)
 }
 
+// executeOption 执行模板的参数
+type executeOption struct {
+	noPrintToken bool // 不输出 tag 本身
+	processChild func(w io.Writer) error
+}
+
+var notPrintChild = func(w io.Writer) error { return nil }
+
 // ExecuteTree 执行一棵文档树
-func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, printChild bool, data any) error {
+func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, data exp.Scope, opt *executeOption) error {
 	if tree == nil {
 		return nil
 	}
-	// text
-	// cdata
-	// comment
-	// tag
-
-	// :text
-	// :raw
-	// :if
-	// :else-if
-	// :else
-	// :range
-	// :remove
-	// :define
-	// :insert
-	// :replace
-
-	var buf = &strings.Builder{}
-	var nop = func() error { return nil }
-	var defaultProcessChild = func() error {
-		for _, child := range tree.Children {
-			if err := h.ExecuteTree(child, w, true, true, data); err != nil {
-				return err
-			}
-		}
-		return nil
+	if opt == nil {
+		opt = &executeOption{}
 	}
-	var processChid = defaultProcessChild
-	// 开始
-	token := tree.Token
+	// 子节点处理函数
+	if opt.processChild == nil {
+		opt.processChild = func(w io.Writer) error {
+			for _, child := range tree.Children {
+				if err := h.ExecuteTree(child, w, data, nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}
+
+	// 开始标签
+	var (
+		token    = tree.Token         // <p>child</p> ==> <p>是token, child 是子节点, </p> 是End
+		tokenBuf = &strings.Builder{} // 开始标签缓冲区
+	)
 	if token != nil { // root doc is nil
 		switch token.Kind {
 		case TokenKindTag:
-			tag := token.Tag
-			if tag == nil {
-				return fmt.Errorf("unexpected nil tag (from position %v to %v): %q",
-					token.Start, token.End, token.Value)
+			if err := h.processTagStart(tree, tokenBuf, data, opt); err != nil {
+				return fmt.Errorf("failed to process tag [%v](from postion %v to %v): %w",
+					token.Value, token.Start, token.End, err)
 			}
-			var tokenBuf = &strings.Builder{}
-			name := strings.ToLower(tag.Name)
-			if name == h.tagPrefix+"block" {
-				printToken = false // <t:block> ... </t:block>
-			}
-			m := tag.AttrMap()
-			writeToBufIf(printToken, tokenBuf, "<"+tag.Name)
-			for _, attr := range tag.Attrs {
-				attr := attr
-				an := attr.Name
-				if strings.HasPrefix(an, h.attrPrefix) { // 指令属性
-					cmd := strings.TrimPrefix(an, h.attrPrefix)
-					switch cmd {
-					case "text", "raw": // 替换内容
-						processChid = func() error {
-							av := attr.Value
-							if av == nil {
-								return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
-							}
-							result, err := attr.Evaluate(data)
-							if err != nil {
-								return err
-							}
-							if cmd == "text" {
-								result = html.EscapeString(result)
-							}
-							_, err = w.Write([]byte(result))
-							return err
-						}
-					case "if", "else", "else-if": // 条件控制
-					case "range": // 循环
-					case "remove": // 移除
-						var av string
-						if attr.Value != nil {
-							av = *attr.Value
-						}
-						switch av {
-						case `"all"`, `'all'`:
-							printToken = false
-							processChid = nop
-						case `"body"`, `'body'`:
-							processChid = nop
-						case `"tag"`, `'tag'`:
-							printToken = false
-						case `"all-but-first"`, `'all-but-first'`:
-						default:
-						}
-					case "define": // 定义可复用组件
-					case "insert": // 插入组件作为内容
-					case "replace": // 用组件替换本身
-					default: // 其他指令 替换普通属性
-						result, err := attr.Evaluate(data)
-						if err != nil {
-							return err
-						}
-						result = html.EscapeString(result)
-						result = fmt.Sprintf(" %v=%q", cmd, result)
-						writeToBufIf(printToken, tokenBuf, result)
-					}
-				} else { // 普通属性
-					if _, ok := m[h.attrPrefix+an]; !ok {
-						// 如果有对应的指令属性则跳过 没有才输出
-						if printToken {
-							attr.Print(tokenBuf)
-						}
-					}
-				}
-			}
-			writeToBufIf(printToken, tokenBuf, ">")
-			writeToBufIf(printToken, buf, tokenBuf.String())
 		case TokenKindComment:
+			cmtValue := strings.TrimPrefix(token.Value, "<!--")
+			cmtValue = strings.TrimSuffix(cmtValue, "-->")
+			cmtValue = strings.TrimSpace(cmtValue)
 			// <!-- /* */ -->
-			value := strings.TrimPrefix(token.Value, "<!--")
-			value = strings.TrimSuffix(value, "-->")
-			value = strings.TrimSpace(value)
-			if strings.HasPrefix(value, "/*") && strings.HasSuffix(value, "*/") {
-				printToken = false
+			if strings.HasPrefix(cmtValue, "/*") && strings.HasSuffix(cmtValue, "*/") {
+				opt.noPrintToken = true
 			}
-			writeToBufIf(printToken, buf, token.Value)
+			writeToBuf(opt, tokenBuf, token.Value)
 		default: // text, cdata
-			writeToBufIf(printToken, buf, token.Value)
+			writeToBuf(opt, tokenBuf, token.Value)
 		}
 	}
-	if _, err := w.Write([]byte(buf.String())); err != nil {
+	if _, err := w.Write([]byte(tokenBuf.String())); err != nil {
+		return err // 从缓冲区真正输出开始标签
+	}
+
+	// 标签内的子节点内容
+	if err := opt.processChild(w); err != nil {
 		return err
 	}
 
-	// 内容
-	if err := processChid(); err != nil {
-		return err
-	}
-
-	// 结束
-	token = tree.End
-	if token != nil && printToken {
+	// 结束标签
+	if token = tree.End; token != nil && !opt.noPrintToken {
 		_, err := w.Write([]byte(token.Value))
 		if err != nil {
 			return err
@@ -303,8 +232,195 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, printToken bool, pri
 	return nil
 }
 
-func writeToBufIf(cond bool, buf *strings.Builder, data string) {
-	if cond {
+// processTagStart 处理开始标签
+func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
+	data exp.Scope, opt *executeOption) error {
+	tag := node.Token.Tag
+	if tag == nil {
+		return fmt.Errorf("unexpected nil tag")
+	}
+	name := strings.ToLower(tag.Name)
+	if name == h.tagPrefix+"block" {
+		opt.noPrintToken = true // <t:block> ... </t:block>
+	}
+	var tagBuf = &strings.Builder{}
+	writeToBuf(opt, tagBuf, "<"+tag.Name)
+
+	m := tag.AttrMap()
+	for _, attr := range tag.SortedAttr(h.attrPrefix) {
+		attr := attr
+		an := attr.Name
+		if strings.HasPrefix(an, h.attrPrefix) { // 指令属性
+			cmd := strings.TrimPrefix(an, h.attrPrefix)
+			switch cmd {
+			case "text", "raw": // 替换内容
+				opt.processChild = func(w io.Writer) error {
+					av := attr.Value
+					if av == nil {
+						return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
+					}
+					result, err := attr.Evaluate(data)
+					if err != nil {
+						return err
+					}
+					if cmd == "text" {
+						result = html.EscapeString(result)
+					}
+					_, err = w.Write([]byte(result))
+					return err
+				}
+			case "if", "else", "else-if": // 条件控制
+			case "range": // 循环
+			/*
+				av := attr.Value
+					if av == nil {
+						return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
+					}
+					attrValue := *av
+					if attrValue == "" {
+						break
+					}
+					attrValue = strings.TrimPrefix(attrValue, "'")
+					attrValue = strings.TrimSuffix(attrValue, "'")
+					attrValue = strings.TrimPrefix(attrValue, "\"")
+					attrValue = strings.TrimSuffix(attrValue, "\"")
+					indexName, itemName, arrayName, err := extractRange(attrValue)
+					if err != nil {
+						return err
+					}
+					scope := exp.WithDefaultScope(data)
+					array, err := scope.Get(arrayName)
+					if err != nil {
+						return err
+					}
+					rv := reflect.ValueOf(array)
+					rk := rv.Kind()
+					var getRange = func() (any, any, bool) {
+						return nil, nil, false
+					}
+					switch rk {
+					case reflect.Array, reflect.Slice, reflect.String:
+						i := 0
+						count := rv.Len()
+						getRange = func() (any, any, bool) {
+							var v any
+							if i < count {
+								v = rv.Index(i).Interface()
+								i++
+								return i, v, true
+							}
+							return 0, nil, false
+						}
+					case reflect.Map:
+						iter := rv.MapRange()
+						getRange = func() (any, any, bool) {
+							if iter.Next() {
+								return iter.Key().Interface(),
+									iter.Value().Interface(), true
+							}
+							return nil, nil, false
+						}
+					}
+					for {
+						i, n, ok := getRange()
+						if !ok {
+							break
+						}
+						childScope := exp.Combine(exp.NewScope(map[string]any{
+							indexName: i,
+							itemName:  n,
+						}), scope)
+
+						*av = ""
+						if err := h.ExecuteTree(tree, tokenBuf, printToken, printChild, childScope); err != nil {
+							return err
+						}
+					}*/
+			case "remove": // 移除
+				h.processRemoveAttr(node, attr, data, opt)
+			case "define": // 定义可复用组件
+			case "insert": // 插入组件作为内容
+			case "replace": // 用组件替换本身
+			default: // 其他指令 替换普通属性
+				result, err := attr.Evaluate(data)
+				if err != nil {
+					return err
+				}
+				result = html.EscapeString(result)
+				result = fmt.Sprintf(" %v=%q", cmd, result)
+				writeToBuf(opt, tagBuf, result)
+			}
+		} else { // 普通属性
+			if _, ok := m[h.attrPrefix+an]; !ok {
+				// 如果有对应的指令属性则跳过 没有才输出
+				if !opt.noPrintToken {
+					attr.Print(tagBuf)
+				}
+			}
+		}
+	}
+
+	writeToBuf(opt, tagBuf, ">")
+	writeToBuf(opt, tokenBuf, tagBuf.String())
+	return nil
+}
+
+// processRemoveAttr 处理 remove 属性
+func (h *htmlTemplate) processRemoveAttr(node *Node, attr *Attr, data exp.Scope, opt *executeOption) {
+	var av string
+	if attr.Value != nil {
+		av = *attr.Value
+	}
+	switch av {
+	case `"all"`, `'all'`:
+		opt.noPrintToken = true
+		opt.processChild = notPrintChild
+	case `"body"`, `'body'`:
+		opt.processChild = notPrintChild
+	case `"tag"`, `'tag'`:
+		opt.noPrintToken = true
+	case `"all-but-first"`, `'all-but-first'`:
+		// 只输出第一个tag，如果之后有空白文本也输出
+		opt.processChild = func(w io.Writer) error {
+			var blankTextBefore, tagNode, blankTextAfter *Node
+			for _, child := range node.Children {
+				child := child
+				if token := child.Token; token != nil {
+					isBlankText := token.Kind == TokenKindText && strings.TrimSpace(token.Value) == ""
+					if tagNode == nil && blankTextBefore == nil && isBlankText {
+						blankTextBefore = child
+					}
+					if tagNode == nil && token.Kind == TokenKindTag {
+						tagNode = child
+					}
+					if tagNode != nil && blankTextAfter == nil && isBlankText {
+						blankTextAfter = child
+					}
+				}
+			}
+			if tagNode != nil {
+				if blankTextBefore != nil {
+					if err := h.ExecuteTree(blankTextBefore, w, data, nil); err != nil {
+						return err
+					}
+				}
+				if err := h.ExecuteTree(tagNode, w, data, nil); err != nil {
+					return err
+				}
+				if blankTextAfter != nil {
+					if err := h.ExecuteTree(blankTextAfter, w, data, nil); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	default:
+	}
+}
+
+func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {
+	if !opt.noPrintToken {
 		buf.WriteString(data)
 	}
 }

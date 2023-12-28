@@ -12,16 +12,12 @@ import (
 
 var _ parser.GoExpressionVisitor = (*visitor)(nil)
 var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
-var defaultScope = NewScope(map[string]any{
-	"true":  true,
-	"false": false,
-})
 
 // NewVisitor 创建一个 Visitor 实例
 // 通过 Visitor 遍历语法树来对其求值
 func NewVisitor(pos Pos, s Scope) *visitor {
 	return &visitor{
-		Scope: Combine(s, defaultScope),
+		Scope: WithDefaultScope(s),
 		Pos:   pos,
 	}
 }

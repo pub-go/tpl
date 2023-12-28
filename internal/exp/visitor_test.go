@@ -131,7 +131,7 @@ func TestNewVisitor(t *testing.T) {
 				},
 				want:    nil,
 				wantErr: true,
-				errMsg:  "oprand name `i` not found: no such key `i`: not found in scope",
+				errMsg:  "oprand name `i` not found: key not found `i`: no such value",
 			},
 			{
 				name: "oprand-paren",
@@ -167,7 +167,7 @@ func TestNewVisitor(t *testing.T) {
 				},
 				want:    nil,
 				wantErr: true,
-				errMsg:  "field `c` not found: no such field `c`: not found in scope",
+				errMsg:  "field `c` not found: field not found `c`: no such value",
 			},
 			{
 				name: "index",
