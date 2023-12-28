@@ -12,12 +12,13 @@ import (
 
 // htmlTemplate HTML 模板
 type htmlTemplate struct {
-	textTags     []string
-	voidElements []string
-	tagPrefix    string
-	attrPrefix   string
-	files        map[string]*Node
-	current      string
+	textTags      []string
+	voidElements  []string
+	tagPrefix     string
+	attrPrefix    string
+	files         map[string]*Node
+	current       string
+	nodeCondition map[*Node]bool
 }
 
 // NewHtmlTemplate 新建一个 HTML 模板实例
@@ -169,6 +170,13 @@ type executeOption struct {
 
 var notPrintChild = func(w io.Writer) error { return nil }
 
+func (h *htmlTemplate) addNodeCondition(node *Node, cond bool) {
+	if h.nodeCondition == nil {
+		h.nodeCondition = map[*Node]bool{}
+	}
+	h.nodeCondition[node] = cond
+}
+
 // ExecuteTree 执行一棵文档树
 func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, data exp.Scope, opt *executeOption) error {
 	if tree == nil {
@@ -176,17 +184,6 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, data exp.Scope, opt 
 	}
 	if opt == nil {
 		opt = &executeOption{}
-	}
-	// 子节点处理函数
-	if opt.processChild == nil {
-		opt.processChild = func(w io.Writer) error {
-			for _, child := range tree.Children {
-				if err := h.ExecuteTree(child, w, data, nil); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
 	}
 
 	// 开始标签
@@ -219,6 +216,16 @@ func (h *htmlTemplate) ExecuteTree(tree *Node, w io.Writer, data exp.Scope, opt 
 	}
 
 	// 标签内的子节点内容
+	if opt.processChild == nil {
+		opt.processChild = func(w io.Writer) error {
+			for _, child := range tree.Children {
+				if err := h.ExecuteTree(child, w, data, nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}
 	if err := opt.processChild(w); err != nil {
 		return err
 	}
@@ -244,10 +251,11 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 	if name == h.tagPrefix+"block" {
 		opt.noPrintToken = true // <t:block> ... </t:block>
 	}
-	hasRangeAttr := h.hasRangeAttr(tag)
-	if hasRangeAttr {
+	skipAttrNames := h.hasAnyAttr(tag, "range", "if", "else-if", "elseif", "elif", "else")
+	if len(skipAttrNames) > 0 {
 		opt.noPrintToken = true
 		// <li :range="">xxx<li> 不输出 tag 在处理 range 时再输出
+		opt.processChild = notPrintChild
 	}
 	var tagBuf = &strings.Builder{}
 	writeToBuf(opt, tagBuf, "<"+tag.Name)
@@ -259,7 +267,10 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 		if strings.HasPrefix(an, h.attrPrefix) { // 指令属性
 			cmd := strings.TrimPrefix(an, h.attrPrefix)
 			switch cmd {
-			case "if", "else", "else-if": // 条件控制
+			case "if", "else-if", "elseif", "elif", "else": // 条件控制
+				if err := h.processIfElse(node, attr, tokenBuf, data, opt); err != nil {
+					return err
+				}
 			case "range": // 循环
 				if err := h.processRange(node, attr, tokenBuf, data, opt); err != nil {
 					return err
@@ -267,8 +278,7 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 			case "remove": // 移除
 				h.processRemoveAttr(node, attr, data, opt)
 			case "text", "raw": // 替换内容
-				if hasRangeAttr {
-					opt.processChild = notPrintChild
+				if opt.processChild != nil {
 					continue
 				}
 				opt.processChild = func(w io.Writer) error {
@@ -313,12 +323,69 @@ func (h *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 	return nil
 }
 
-func (h *htmlTemplate) hasRangeAttr(tag *Tag) bool {
-	m := tag.AttrMap()
-	if attr, ok := m[h.attrPrefix+"range"]; ok {
-		return attr.Value != nil && *attr.Value != ""
+func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {
+	if !opt.noPrintToken {
+		buf.WriteString(data)
 	}
-	return false
+}
+
+func (h *htmlTemplate) hasAnyAttr(tag *Tag, names ...string) (attrName map[string]struct{}) {
+	m := tag.AttrMap()
+	tag.FixElseAttr(h.attrPrefix)
+	attrName = make(map[string]struct{}, len(names))
+	for _, n := range names {
+		if attr, ok := m[h.attrPrefix+n]; ok {
+			if attr.Value != nil && *attr.Value != "" {
+				attrName[n] = struct{}{}
+			}
+		}
+	}
+	return
+}
+
+// processIfElse 处理 if-else 属性
+func (h *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
+	an := attr.Name
+	if attr.Value == nil {
+		empty := "true"
+		attr.Value = &empty
+	}
+	if *attr.Value == "" {
+		return nil
+	}
+	*attr.Value = ""                 // 下面重新调用 ExecuteTree 时 就会跳过本函数了
+	opt.processChild = notPrintChild // 不要输出子内容 因为如果满足条件 在下面的 ExecuteTree 会输出子内容
+	cmd := strings.TrimPrefix(an, h.attrPrefix)
+	switch cmd {
+	case "if":
+		return h.evaluateCondition(node, attr, tokenBuf, data, opt)
+	case "else-if", "elseif", "elif":
+		if !h.nodeCondition[node.GetPreviousSiblingTag()] {
+			// 如果前一个节点是 false 才要计算本节点
+			return h.evaluateCondition(node, attr, tokenBuf, data, opt)
+		}
+	case "else":
+		if !h.nodeCondition[node.GetPreviousSiblingTag()] {
+			// 如果前一个节点是 false 才要计算本节点
+			return h.evaluateCondition(node, attr, tokenBuf, data, opt)
+		}
+	}
+	return nil
+}
+
+func (h *htmlTemplate) evaluateCondition(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
+	result, err := attr.Evaluate(data)
+	if err != nil {
+		return fmt.Errorf("failed to evaluate `if` attribute [%v]: %w", *attr.Value, err)
+	}
+	h.addNodeCondition(node, false)
+	if result == "true" {
+		h.addNodeCondition(node, true)
+		if err := h.ExecuteTree(node, tokenBuf, data, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // processRemoveAttr 处理 remove 属性
@@ -337,6 +404,9 @@ func (h *htmlTemplate) processRemoveAttr(node *Node, attr *Attr, data exp.Scope,
 		opt.noPrintToken = true
 	case `"all-but-first"`, `'all-but-first'`:
 		// 只输出第一个tag，如果之后有空白文本也输出
+		if opt.processChild != nil {
+			return
+		}
 		opt.processChild = func(w io.Writer) error {
 			var tagIndex int
 			var blankTextBefore, tagNode, blankTextAfter *Node
@@ -378,12 +448,7 @@ func (h *htmlTemplate) processRemoveAttr(node *Node, attr *Attr, data exp.Scope,
 	}
 }
 
-func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {
-	if !opt.noPrintToken {
-		buf.WriteString(data)
-	}
-}
-
+// processRange 处理 range 属性
 func (h *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
 	an := attr.Name
 	av := attr.Value
@@ -444,22 +509,9 @@ func (h *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 	//   <li>
 	// </ul>
 	// 处理 range 的 li 项目时，找到并输出 </li> 后的空白字符
-	var nextSiblingBlankTextNode *Node
-	var nodeIndex int // 当前 node 在父节点的位置
-	if node.Parent != nil {
-		for i, child := range node.Parent.Children {
-			if child == node {
-				nodeIndex = i
-				break
-			}
-		}
-
-		if nodeIndex < len(node.Parent.Children)-1 {
-			next := node.Parent.Children[nodeIndex+1]
-			if next.IsBlankText() {
-				nextSiblingBlankTextNode = next
-			}
-		}
+	var nextSiblingBlankTextNode = node.GetNextSibling()
+	if !nextSiblingBlankTextNode.IsBlankText() {
+		nextSiblingBlankTextNode = nil
 	}
 
 	*av = "" // 标记 range 指令已经执行 下面 for 循环执行 node 时就会忽略 range 指令了
