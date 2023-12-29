@@ -17,6 +17,9 @@ type Scope interface {
 	Get(name string) (result any, err error)
 }
 
+// EmptyScope 构造一个没有任何值的作用域
+func EmptyScope() Scope { return NewScope(map[string]any{}) }
+
 // NewScope 从结构体/map/数组/切片新建作用域
 func NewScope(data any) Scope {
 	return &scope{data: data}

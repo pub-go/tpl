@@ -9,12 +9,17 @@
 </head>
 
 <body>
+    <template :define="foo">
+        <p>blabla</p>
+    </template>
     <header>
         <h1 title="属性的标题
 可以换行">页眉</h1>
+        <div :insert="foo">插入到子节点中</div>
     </header>
 
     <div>
+        <p :replace="foo">替换整个 tag</p>
         <main>
             <!-- ${} 内是代码 -->
             <p :text="${t('Hello, %v', name)}">Hello, World!</p>
