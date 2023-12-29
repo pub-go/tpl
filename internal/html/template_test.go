@@ -20,10 +20,11 @@ func TestNewHtmlTemplate(t *testing.T) {
 		ID int
 	}
 	err = h.Execute(os.Stdout, map[string]any{
-		"t":     func(input string, args ...any) string { return fmt.Sprintf(input, args...) },
-		"name":  "<b>Tom</b>",
-		"items": []Item{{ID: 999}, {ID: 666}},
-		"len":   func(a []Item) int { return len(a) },
+		"t":         func(input string, args ...any) string { return fmt.Sprintf(input, args...) },
+		"name":      "<b>Tom</b>",
+		"hideItems": false,
+		"items":     []Item{{ID: 999}, {ID: 666}},
+		"len":       func(a []Item) int { return len(a) },
 	})
 	if err != nil {
 		t.Errorf("execute template error: %+v", err)

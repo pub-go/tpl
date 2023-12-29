@@ -331,7 +331,6 @@ func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {
 
 func (h *htmlTemplate) hasAnyAttr(tag *Tag, names ...string) (attrName map[string]struct{}) {
 	m := tag.AttrMap()
-	tag.FixElseAttr(h.attrPrefix)
 	attrName = make(map[string]struct{}, len(names))
 	for _, n := range names {
 		if attr, ok := m[h.attrPrefix+n]; ok {
@@ -358,22 +357,21 @@ func (h *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.B
 	cmd := strings.TrimPrefix(an, h.attrPrefix)
 	switch cmd {
 	case "if":
-		return h.evaluateCondition(node, attr, tokenBuf, data, opt)
-	case "else-if", "elseif", "elif":
-		if !h.nodeCondition[node.GetPreviousSiblingTag()] {
-			// 如果前一个节点是 false 才要计算本节点
-			return h.evaluateCondition(node, attr, tokenBuf, data, opt)
+		return h.evaluateCondition(node, attr, tokenBuf, data)
+	case "else-if", "elseif", "elif", "else":
+		p, ok := h.nodeCondition[node.GetPreviousSiblingTag()]
+		if !ok {
+			return fmt.Errorf("unexpected `%v` attribute at %v", attr.Name, attr.NameStart)
 		}
-	case "else":
-		if !h.nodeCondition[node.GetPreviousSiblingTag()] {
+		if !p {
 			// 如果前一个节点是 false 才要计算本节点
-			return h.evaluateCondition(node, attr, tokenBuf, data, opt)
+			return h.evaluateCondition(node, attr, tokenBuf, data)
 		}
 	}
 	return nil
 }
 
-func (h *htmlTemplate) evaluateCondition(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
+func (h *htmlTemplate) evaluateCondition(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope) error {
 	result, err := attr.Evaluate(data)
 	if err != nil {
 		return fmt.Errorf("failed to evaluate `if` attribute [%v]: %w", *attr.Value, err)

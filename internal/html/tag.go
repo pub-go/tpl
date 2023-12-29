@@ -1,6 +1,7 @@
 package html
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -11,6 +12,20 @@ type Tag struct {
 	Attrs  []*Attr
 	sorted int
 	attrs  map[string]*Attr
+}
+
+// AddAttr 保存属性
+func (t *Tag) AddAttr(attr *Attr) error {
+	if t.attrs == nil {
+		t.attrs = map[string]*Attr{}
+	}
+	if pre, has := t.attrs[attr.Name]; has {
+		return fmt.Errorf("duplicate attribute `%v` at %v, previous occured at %v",
+			attr.Name, attr.NameStart, pre.NameStart)
+	}
+	t.attrs[attr.Name] = attr
+	t.Attrs = append(t.Attrs, attr)
+	return nil
 }
 
 // AttrMap 构造属性 Map 用于快速查找

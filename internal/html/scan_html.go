@@ -368,8 +368,11 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 					Name:      name,
 					NameStart: attrNameStart,
 					NameEnd:   attrNameEnd,
+				} // <p name>
+				t.compileAttr(attr)
+				if err := tag.AddAttr(attr); err != nil {
+					return nil, t.Err("scan attr failed:%v. cause: %w", attr, err)
 				}
-				tag.Attrs = append(tag.Attrs, attr)
 				// 转到 state switch 后面的 > 字符判断去结束 tag 并转换 state 为 init
 			} else if ch == '=' {
 				t.state = stateTagAttrValue
@@ -382,8 +385,11 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 						Name:      strings.TrimSuffix(name, " "),
 						NameStart: attrNameStart,
 						NameEnd:   attrNameEnd,
+					} // <p foo bar> 读取到 b
+					t.compileAttr(attr)
+					if err := tag.AddAttr(attr); err != nil {
+						return nil, t.Err("scan attr failed: %v. cause: %w", attr, err)
 					}
-					tag.Attrs = append(tag.Attrs, attr)
 					attrName.Reset()
 					t.UnRead()
 					attrNameStart = t.pos
@@ -428,7 +434,9 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 					if err := t.compileAttr(attr); err != nil {
 						return nil, t.Err("compile attr failed: %v. cause: %w", attr, err)
 					}
-					tag.Attrs = append(tag.Attrs, attr)
+					if err := tag.AddAttr(attr); err != nil {
+						return nil, t.Err("scan attr failed:%v. cause: %w", attr, err)
+					}
 					// 去消耗掉连续的空白
 					t.state = stateTagSpace
 					// 如果是 '>' 执行到下方重新转 init
@@ -457,6 +465,10 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 }
 
 func (t *HtmlScanner) compileAttr(attr *Attr) error {
+	if attr.Value == nil && attr.Name == t.attrPrefix+"else" { // <p :else> ==> <p :else="true">
+		t := `"true"`
+		attr.Value = &t
+	}
 	if attr.Value == nil || !strings.HasPrefix(attr.Name, t.attrPrefix) {
 		return nil
 	}
