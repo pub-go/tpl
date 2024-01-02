@@ -11,7 +11,7 @@ import (
 // ParseCode 解析代码为语法树
 func ParseCode(input string, opts ...parseCodeOpt) (tree parser.IExpressionContext, err error) {
 	opt := &parseCodeOption{
-		start: Pos{1, 1},
+		start: NewPos(1, 1),
 	}
 	for _, f := range opts {
 		f(opt)

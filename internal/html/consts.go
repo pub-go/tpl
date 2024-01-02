@@ -1,6 +1,11 @@
 package html
 
 const (
+	DefaultTagPrefix  = "t:" // 默认的标签名前缀
+	DefaultAttrPrefix = ":"  // 默认的属性名前缀
+)
+
+const (
 	tagNameBlock = "block"   // <block>只输出子内容的标签</block>
 	attrIf       = "if"      // <div :if="${cond}">满足条件时才会输出本节点</div>
 	attrElse_If  = "else-if" // 前一个tag必须含 if 属性，前一个节点不满足条件时会判断本节点
@@ -25,4 +30,27 @@ const (
 	removeTag1, removeTag2 = `"tag"`, `'tag'`
 	// 保留 tag 本身，保留 tag 的第一个子 tag
 	removeAllButFirst1, removeAllButFirst2 = `"all-but-first"`, `'all-but-first'`
+)
+
+const textTrue = "true"
+
+// GetDefaultTextTags 默认的只包含文本的标签
+func GetDefaultTextTags() []string {
+	return []string{
+		"script", "style", "textarea", "title",
+	}
+}
+
+// GetDefaultVoidElements 默认的空标签 不含闭合斜线 不含内容
+func GetDefaultVoidElements() []string {
+	return []string{
+		"!doctype", // 特殊
+		"area", "base", "br", "col", "embed", "hr", "img",
+		"input", "link", "meta", "source", "track", "wbr",
+	}
+}
+
+const (
+	noSuchTemplate      = "no such template `%v`"
+	attrShouldHaveValue = "attribute `%s` should have value (at position %v)"
 )

@@ -371,7 +371,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 				} // <p name>
 				t.compileAttr(attr)
 				if err := tag.AddAttr(attr); err != nil {
-					return nil, t.Err("scan attr failed:%v. cause: %w", attr, err)
+					return nil, t.Err("scan attr failed: %v. cause: %w", attr, err)
 				}
 				// 转到 state switch 后面的 > 字符判断去结束 tag 并转换 state 为 init
 			} else if ch == '=' {
@@ -435,7 +435,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 						return nil, t.Err("compile attr failed: %v. cause: %w", attr, err)
 					}
 					if err := tag.AddAttr(attr); err != nil {
-						return nil, t.Err("scan attr failed:%v. cause: %w", attr, err)
+						return nil, t.Err("scan attr failed: %v. cause: %w", attr, err)
 					}
 					// 去消耗掉连续的空白
 					t.state = stateTagSpace

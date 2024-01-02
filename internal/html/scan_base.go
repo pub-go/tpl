@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"code.gopub.tech/logs"
+	"code.gopub.tech/tpl/internal/exp"
 )
 
 // BaseScanner 词法扫描器
@@ -24,7 +25,7 @@ type BaseScanner struct {
 func NewBaseScanner(r io.Reader) *BaseScanner {
 	return (&BaseScanner{
 		reader: bufio.NewReader(r),
-	}).SetPos(Pos{1, 1})
+	}).SetPos(exp.NewPos(1, 1))
 }
 
 // SetPos 设置位置

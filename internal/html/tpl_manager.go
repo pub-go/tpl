@@ -15,6 +15,8 @@ var (
 	ErrDuplicatedTplName = fmt.Errorf("duplicated template name")
 	// ErrTplNotFound 模板未找到
 	ErrTplNotFound = fmt.Errorf("template not found")
+	// ErrNilTag 找不到 tag 信息
+	ErrNilTag = fmt.Errorf("unexpected nil tag")
 )
 var _ types.TemplateManager = (*tplManager)(nil)
 
@@ -119,7 +121,8 @@ func (m *tplManager) Parse(fsys fs.FS, match func(path string) (bool, error)) er
 // @param reader 文件内容
 func (m *tplManager) Add(name string, reader io.Reader) error {
 	if _, ok := m.files[name]; ok {
-		return fmt.Errorf("can not add template `%v`: %w", name, ErrDuplicatedTplName)
+		return fmt.Errorf("failed to add template `%v`: %w",
+			name, ErrDuplicatedTplName)
 	}
 	tz := NewHtmlScanner(reader).
 		SetTextTags(m.textTags).
@@ -138,7 +141,7 @@ func (m *tplManager) Add(name string, reader io.Reader) error {
 }
 
 // addDefinedTpl 查找模板文件中定义的可复用模板
-func (m *tplManager) addDefinedTpl(name string, tree *Node) error {
+func (m *tplManager) addDefinedTpl(fileName string, tree *Node) error {
 	var (
 		token      = tree.Token
 		attrPrefix = m.attrPrefix
@@ -149,37 +152,31 @@ func (m *tplManager) addDefinedTpl(name string, tree *Node) error {
 			// <p :define="name">xxx</p>
 			// <div :insert="name">yyy</div>
 			// -->
-			// <div><p>xxx</p></div>
+			// <div>xxx</div>
 			tag := token.Tag
 			if tag == nil {
-				return fmt.Errorf("unexpected nil tag")
+				return fmt.Errorf("failed to add template in %v at %v %w",
+					fileName, token.Start, ErrNilTag)
 			}
 			attr, ok := tag.AttrMap()[attrPrefix+attrDefine]
 			if !ok {
 				break
 			}
-			av := attr.Value
-			if av == nil {
-				return fmt.Errorf("attribute `%s` should have value (at position %v)",
-					attr.Name, attr.NameEnd)
-			}
-			name, err := attr.Evaluate(exp.EmptyScope())
+			tplName, err := attr.Evaluate(exp.EmptyScope())
 			if err != nil {
-				return fmt.Errorf("failed to evaluate %v attribute [%v]: %w",
-					attr.Name, *attr.Value, err)
+				return err
 			}
-			if _, has := m.files[name]; has {
-				return fmt.Errorf("can not define template %v in %v at %v: %w",
-					name, name, attr.ValueStart, ErrDuplicatedTplName)
+			if _, has := m.files[tplName]; has {
+				return fmt.Errorf("failed to add template `%v` defined in %v at %v: %w",
+					tplName, fileName, attr.ValueStart, ErrDuplicatedTplName)
 			}
-			*av = ""
-			m.files[name] = &Node{ // 定义的模板不包括 :define 本身
-				Children: tree.Children,
+			m.files[tplName] = &Node{ // 定义的模板不包括 :define 本身
+				Children: tree.GetChildrenWithoutHeadTailBlankText(),
 			}
 		}
 	}
 	for _, child := range tree.Children {
-		if err := m.addDefinedTpl(name, child); err != nil {
+		if err := m.addDefinedTpl(fileName, child); err != nil {
 			return err
 		}
 	}
@@ -198,7 +195,7 @@ func (m *tplManager) Files() (file []string) {
 func (m *tplManager) GetTemplate(name string) (types.Template, error) {
 	tree := m.files[name]
 	if tree == nil {
-		return nil, fmt.Errorf("no such template `%v`:%w", name, ErrTplNotFound)
+		return nil, fmt.Errorf(noSuchTemplate+": %w", name, ErrTplNotFound)
 	}
 	return NewTemplate(m, name, tree), nil
 }

@@ -932,7 +932,7 @@ func TestNewVisitor(t *testing.T) {
 					t.Errorf("ParseCode() error = %v", err)
 					return
 				}
-				v := exp.NewVisitor(exp.Pos{1, 1}, exp.NewScope(tt.args.data))
+				v := exp.NewVisitor(exp.NewPos(1, 1), exp.NewScope(tt.args.data))
 				result, err := v.Evaluate(tree)
 				t.Logf("result=%T(%v), err=%v", result, result, err)
 				if (err != nil) != tt.wantErr {

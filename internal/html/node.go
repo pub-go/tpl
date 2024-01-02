@@ -33,6 +33,7 @@ func (n *Node) GetPreviousSibling() (pre *Node) {
 }
 
 // GetPreviousSiblingTag 获取前一个 tag 节点
+// 可用于 :else 之前是否 :if 检测
 func (n *Node) GetPreviousSiblingTag() (pre *Node) {
 	if n.Parent == nil {
 		return nil
@@ -51,6 +52,7 @@ func (n *Node) GetPreviousSiblingTag() (pre *Node) {
 }
 
 // GetNextSibling 获取下一个兄弟节点
+// 可用于获取 :range 节点之后的空白文本节点
 func (n *Node) GetNextSibling() (next *Node) {
 	if n.Parent == nil {
 		return nil
@@ -62,6 +64,25 @@ func (n *Node) GetNextSibling() (next *Node) {
 			break
 		}
 		p = child
+	}
+	return
+}
+
+// GetChildrenWithoutHeadTailBlankText 获取子节点 但不要第一个和最后一个空白节点(如果不是空白节点就要)
+// 用于
+//
+//	<template :define="name">
+//	  <p>blabla</p>
+//	</template>
+//
+// insert 和 replace 时去除多余的空白
+func (n *Node) GetChildrenWithoutHeadTailBlankText() (result []*Node) {
+	count := len(n.Children)
+	for i, child := range n.Children {
+		if (i == 0 || i == count-1) && child.IsBlankText() {
+			continue
+		}
+		result = append(result, child)
 	}
 	return
 }

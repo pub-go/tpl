@@ -8,6 +8,10 @@ type Pos struct {
 	Column int // 列
 }
 
+func NewPos(line, column int) Pos {
+	return Pos{Line: line, Column: column}
+}
+
 func (p Pos) String() string {
 	return fmt.Sprintf("%d:%d", p.Line, p.Column)
 }

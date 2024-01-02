@@ -40,12 +40,15 @@ func (t *Tag) AttrMap() map[string]*Attr {
 	return t.attrs
 }
 
+// SortedAttr 对属性排序 指令属性排在前
+// 各指令属性中再按 if, range, remove 顺序
+// 其他属性按出现先后不变
 func (t *Tag) SortedAttr(prefix string) []*Attr {
 	if t.sorted != len(t.Attrs) {
 		weight := map[string]int{
-			"if":     -3,
-			"range":  -2,
-			"remove": -1,
+			attrIf:     -3,
+			attrRange:  -2,
+			attrRemove: -1,
 		}
 		sort.SliceStable(t.Attrs, func(i, j int) bool {
 			x, y := t.Attrs[i].Name, t.Attrs[j].Name

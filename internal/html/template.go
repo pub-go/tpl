@@ -18,17 +18,27 @@ type htmlTemplate struct {
 	manager       *tplManager
 	name          string
 	node          *Node
+	currentAttrs  map[*Node]int
 	nodeCondition map[*Node]bool
 }
 
 // NewTemplate 构造一个模板实例
 func NewTemplate(m *tplManager, name string, node *Node) *htmlTemplate {
 	return &htmlTemplate{
-		manager: m,
-		name:    name,
-		node:    node,
+		manager:       m,
+		name:          name,
+		node:          node,
+		currentAttrs:  map[*Node]int{},
+		nodeCondition: map[*Node]bool{},
 	}
 }
+
+const (
+	// 正在处理的属性是 条件属性 if, else-if, else 等
+	currentIsCond = 1 << iota
+	// 正在处理的属性是 range
+	currentIsRange
+)
 
 // Execute implements types.Template. 执行模板
 func (t *htmlTemplate) Execute(w io.Writer, data any) error {
@@ -113,37 +123,58 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
 	tag := node.Token.Tag
 	if tag == nil {
-		return fmt.Errorf("unexpected nil tag")
+		return ErrNilTag
 	}
-	attrPrefix := t.manager.attrPrefix
-	name := strings.ToLower(tag.Name)
-	if name == t.manager.tagPrefix+tagNameBlock {
+	tagName := strings.ToLower(tag.Name)
+	if tagName == t.manager.tagPrefix+tagNameBlock {
 		opt.noPrintToken = true // <t:block> ... </t:block>
 	}
-	skipAttrNames := t.hasAnyAttr(tag,
+
+	if t.hasAnyAttr(tag,
 		attrDefine,  // define 定义复用模板
 		attrReplace, // replace 用指定模板替换本节点
-		attrIf, attrElse_If, attrElseIf, attrElIf, attrElse,
-		attrRange, // 循环输出本节点
-	)
-	if len(skipAttrNames) > 0 {
+	) {
 		// 有这些属性的, 本次不输出 tag 本身和子节点
-		// <ul :if="xxx">xxx</ul>
-		// <li :range="xxx">xxx<li>
+		// <template :define="foo">xxx</template>
+		// <div :replace="foo">yyy</div>
 		// 在下面处理具体属性时会重新调用 execute 再输出
 		opt.noPrintToken = true
 		opt.processChild = nop
 	}
-	if len(t.hasAnyAttr(tag, attrInsert)) > 0 {
+
+	if t.hasAnyAttr(tag,
+		attrIf, attrElse_If, attrElseIf, attrElIf, attrElse,
+	) && !t.currentAttrIs(node, currentIsCond) {
+		// 有 if 属性，现在还没处理到该属性，说明本节点不需要输出，
+		// 等下处理到这个属性，会重新执行 execute
+		opt.noPrintToken = true
+		opt.processChild = nop
+	}
+
+	if t.hasAnyAttr(tag, attrRange) && !t.currentAttrIs(node, currentIsRange) {
+		// 有 range 属性，现在还没处理到该属性，说明本节点不需要输出，
+		// 等下处理到这个属性，会重新执行 execute
+		opt.noPrintToken = true
+		opt.processChild = nop
+	}
+
+	if t.hasAnyAttr(tag, attrInsert) {
 		// insert 属性：本节点需要输出 子节点不输出
 		// 会在下面执行 insert 属性时替换为指定模板
 		opt.processChild = nop
 	}
 
+	// tagBuf 缓冲 tag 本身输出 <tagName attrName=value>
 	var tagBuf = &strings.Builder{}
 	writeToBuf(opt, tagBuf, "<"+tag.Name)
 
+	// tagContentBuf
+	// insert 指令 需要记录 insert 的内容，在 tagBuf 闭合后追加
+	// replace 指令 会修改其指向，直接往 tokenBuf 输出
+	var tagContentBuf = &strings.Builder{}
+
 	attrMap := tag.AttrMap()
+	attrPrefix := t.manager.attrPrefix
 	for _, attr := range tag.SortedAttr(attrPrefix) {
 		attr := attr
 		an := attr.Name
@@ -165,10 +196,6 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 					continue
 				}
 				opt.processChild = func(w io.Writer) error {
-					av := attr.Value
-					if av == nil {
-						return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
-					}
 					result, err := attr.Evaluate(data)
 					if err != nil {
 						return err
@@ -180,17 +207,23 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 					return err
 				}
 			case attrDefine: // 定义可复用组件 解析模板时已经处理 这里无需处理
-			case attrInsert, attrReplace: // insert=插入组件作为内容 replce=用组件替换本身
+			case attrReplace: // replce=用组件替换本身
+				tagContentBuf = tokenBuf // 不需要输出 tag 本身，所以直接往 tokenBuf 输出即可
+				fallthrough
+			case attrInsert: // insert=插入组件作为内容
 				name, err := attr.Evaluate(data)
 				if err != nil {
-					return fmt.Errorf("failed to evaluate %v attribute [%v]: %w",
-						attr.Name, *attr.Value, err)
+					return err
 				}
-				tpl, ok := t.manager.files[name]
+				tplNode, ok := t.manager.files[name]
 				if !ok {
-					return fmt.Errorf("no such template `%v`:%w", name, ErrTplNotFound)
+					return fmt.Errorf(noSuchTemplate+":%w", name, ErrTplNotFound)
 				}
-				return NewTemplate(t.manager, name, tpl).execute(tpl, tokenBuf, data, nil)
+				tpl := NewTemplate(t.manager, name, tplNode)
+				if err := tpl.execute(tplNode, tagContentBuf, data, nil); err != nil {
+					return fmt.Errorf("failed to %v template `%v` at %v: %w",
+						cmd, name, attr.ValueStart, err)
+				}
 			default: // 其他指令 替换普通属性
 				result, err := attr.Evaluate(data)
 				if err != nil {
@@ -204,13 +237,17 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 			if _, ok := attrMap[attrPrefix+an]; !ok {
 				// 如果有对应的指令属性则跳过 没有才输出
 				if !opt.noPrintToken {
-					attr.Print(tagBuf)
+					tagBuf.WriteString(" " + an)
+					if av := attr.Value; av != nil {
+						tagBuf.WriteString("=" + *av)
+					}
 				}
 			}
 		}
 	}
 
 	writeToBuf(opt, tagBuf, ">")
+	writeToBuf(opt, tagBuf, tagContentBuf.String())
 	writeToBuf(opt, tokenBuf, tagBuf.String())
 	return nil
 }
@@ -222,29 +259,48 @@ func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {
 }
 
 // hasAnyAttr 是否有指定的属性且存在非空属性值
-func (t *htmlTemplate) hasAnyAttr(tag *Tag, names ...string) (attrName map[string]struct{}) {
+func (t *htmlTemplate) hasAnyAttr(tag *Tag, names ...string) bool {
 	attrMap := tag.AttrMap()
-	attrName = make(map[string]struct{}, len(names))
 	for _, n := range names {
-		if attr, ok := attrMap[t.manager.attrPrefix+n]; ok {
-			if attr.Value != nil && *attr.Value != "" {
-				attrName[n] = struct{}{}
-			}
+		if _, ok := attrMap[t.manager.attrPrefix+n]; ok {
+			return true
 		}
 	}
-	return
+	return false
+}
+
+// currentAttrIs 是否正在处理某个属性
+func (t *htmlTemplate) currentAttrIs(node *Node, a int) bool {
+	m := t.currentAttrs[node]
+	return m&a != 0
+}
+
+// recordCurrentAttr 记录正在处理某个属性
+func (t *htmlTemplate) recordCurrentAttr(node *Node, a int) {
+	m := t.currentAttrs[node]
+	m |= a
+	t.currentAttrs[node] = m
+}
+
+// clearCurrentAttr 某个属性已经处理完毕
+func (t *htmlTemplate) clearCurrentAttr(node *Node, a int) {
+	m := t.currentAttrs[node]
+	m &^= a
+	t.currentAttrs[node] = m
 }
 
 // processIfElse 处理 if-else 属性
 func (t *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
 	an := attr.Name
 	if attr.Value == nil {
-		return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
+		return fmt.Errorf(attrShouldHaveValue+": %w", an, attr.NameEnd, ErrAttrValueExpected)
 	}
-	if *attr.Value == "" {
-		return nil
+	if t.currentAttrIs(node, currentIsCond) {
+		return nil // 重新执行的 跳过
 	}
-	*attr.Value = ""       // 下面重新调用 execute 时 就会跳过本函数了
+	t.recordCurrentAttr(node, currentIsCond)
+	defer t.clearCurrentAttr(node, currentIsCond)
+
 	opt.processChild = nop // 不要输出子内容 因为如果满足条件 在下面的 execute 会输出子内容
 	cmd := strings.TrimPrefix(an, t.manager.attrPrefix)
 	switch cmd {
@@ -252,11 +308,10 @@ func (t *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.B
 		return t.evaluateCondition(node, attr, tokenBuf, data)
 	case "else-if", "elseif", "elif", "else":
 		p, ok := t.nodeCondition[node.GetPreviousSiblingTag()]
-		if !ok {
+		if !ok { // 前一个如果不是 if 就不能出现 else-if
 			return fmt.Errorf("unexpected `%v` attribute at %v", attr.Name, attr.NameStart)
 		}
-		if !p {
-			// 如果前一个节点是 false 才要计算本节点
+		if !p { // 如果前一个节点是 false 才要计算本节点
 			return t.evaluateCondition(node, attr, tokenBuf, data)
 		}
 	}
@@ -267,12 +322,11 @@ func (t *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.B
 func (t *htmlTemplate) evaluateCondition(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope) error {
 	result, err := attr.Evaluate(data)
 	if err != nil {
-		return fmt.Errorf("failed to evaluate `%v` attribute [%v]: %w",
-			attr.Name, *attr.Value, err)
+		return err
 	}
-	t.addNodeCondition(node, false)
-	if result == "true" {
-		t.addNodeCondition(node, true)
+	t.nodeCondition[node] = false
+	if result == textTrue {
+		t.nodeCondition[node] = true
 		if err := t.execute(node, tokenBuf, data, nil); err != nil {
 			return err
 		}
@@ -280,32 +334,30 @@ func (t *htmlTemplate) evaluateCondition(node *Node, attr *Attr, tokenBuf *strin
 	return nil
 }
 
-// addNodeCondition 记录节点的条件结果
-func (t *htmlTemplate) addNodeCondition(node *Node, cond bool) {
-	if t.nodeCondition == nil {
-		t.nodeCondition = map[*Node]bool{}
-	}
-	t.nodeCondition[node] = cond
-}
-
 // processRange 处理 range 属性
 func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
 	an := attr.Name
 	av := attr.Value
 	if av == nil {
-		return fmt.Errorf("attribute `%s` should have value (at position %v)", an, attr.NameEnd)
+		return fmt.Errorf(attrShouldHaveValue+": %w", an, attr.NameEnd, ErrAttrValueExpected)
 	}
 	attrValue := *av
-	if attrValue == "" {
-		return nil
+
+	if t.currentAttrIs(node, currentIsRange) {
+		return nil // range 中, 多次执行时 不需要再处理 range
 	}
+	t.recordCurrentAttr(node, currentIsRange)
+	defer t.clearCurrentAttr(node, currentIsRange)
+
+	// :range='all', :range="all-but-first"
 	attrValue = strings.TrimPrefix(attrValue, "'")
 	attrValue = strings.TrimSuffix(attrValue, "'")
 	attrValue = strings.TrimPrefix(attrValue, "\"")
 	attrValue = strings.TrimSuffix(attrValue, "\"")
 	indexName, itemName, objName, err := extractRange(attrValue)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid syntax %v [%v] (at position %v to %v): %w",
+			an, *av, attr.ValueStart, attr.ValueEnd, err)
 	}
 	scope := exp.WithDefaultScope(data)
 	obj, err := scope.Get(objName)
@@ -357,7 +409,6 @@ func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 		nextSiblingBlankTextNode = nil // 如果下一个不是空白文本就算了
 	}
 
-	*av = ""   // 标记 range 指令已经执行 下面 for 循环执行 node 时就会忽略 range 指令了
 	count := 0 // 多个项目之间才输出空白
 	for {
 		i, n, ok := getRange()

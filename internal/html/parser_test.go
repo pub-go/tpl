@@ -8,7 +8,7 @@ import (
 )
 
 func TestParser_ParseTokens(t *testing.T) {
-	f, err := os.Open("../testdata/index.html")
+	f, err := os.Open("../testdata/index.tpl.html")
 	if err != nil {
 		t.Errorf("failed to open test file: %v", err)
 	}
