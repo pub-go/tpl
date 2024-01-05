@@ -167,7 +167,7 @@ func TestNewVisitor(t *testing.T) {
 				},
 				want:    nil,
 				wantErr: true,
-				errMsg:  "field `c` not found: field not found `c`: no such value",
+				errMsg:  "field `c` not found: field not found `c` in exp_test.Foo: no such value",
 			},
 			{
 				name: "index",
