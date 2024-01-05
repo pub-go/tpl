@@ -19,3 +19,8 @@
 
 # Go workspace file
 go.work*
+
+.antlr/
+*.interp
+*.tokens
+.DS_Store
