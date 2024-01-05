@@ -35,8 +35,8 @@ github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
 github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
-github.com/youthlin/t v0.0.8-0.20240105095521-5d92dde20841 h1:SNe1yS6ArReang6duOyY8YVLHNPdlsUW49+EMFFiQ/0=
-github.com/youthlin/t v0.0.8-0.20240105095521-5d92dde20841/go.mod h1:Dh2ha5VUiiW/crXM8wVaZkw+74O68jBxfGhUrevRQo8=
+github.com/youthlin/t v0.0.8 h1:GwIw6f9UEp8TAN7L4X1nmxWA5vCPkQZ4rcKyiir1tsw=
+github.com/youthlin/t v0.0.8/go.mod h1:rW0l6z4hnkQSWZ2MYatEDwE3XEsQ2eep8yCD1umwvWg=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc h1:mCRnTeVUjcrhlRmO0VK8a6k6Rrf6TF9htwo2pJVSjIU=
 golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc/go.mod h1:V1LtkGg67GoY2N1AnLN78QLrzxkLyJw7RJb1gzOOz9w=

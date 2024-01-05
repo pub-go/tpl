@@ -7,7 +7,7 @@ replace code.gopub.tech/tpl => ../../
 require (
 	code.gopub.tech/tpl v0.0.0-00010101000000-000000000000
 	github.com/antlr4-go/antlr/v4 v4.13.0
-	github.com/youthlin/t v0.0.8-0.20240105095521-5d92dde20841
+	github.com/youthlin/t v0.0.8
 )
 
 require (
