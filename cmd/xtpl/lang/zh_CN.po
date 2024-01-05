@@ -1,0 +1,111 @@
+# Chinese translations for data package.
+# Copyright (C) 2024 THE data'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the data package.
+#  <youthlinchen@outlook.com>, 2024.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: data 00\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-04 20:27+0800\n"
+"PO-Revision-Date: 2024-01-04 10:20+0800\n"
+"Last-Translator:  <youthlinchen@outlook.com>\n"
+"Language-Team: Chinese (simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../main.go:43
+#, c-format
+msgid "set tags that only contains text, default value is %s"
+msgstr "设置只包含文本的标签, 默认值是 %s"
+
+#: ../main.go:46
+#, c-format
+msgid ""
+"set void elements which can not contains any child value, default value is %s"
+msgstr "设置不能包含内容的空元素，默认值是 %s"
+
+#: ../main.go:49
+msgid "set tag prefix, default value is %q"
+msgstr "设置标签前缀，默认值是 %q"
+
+#: ../main.go:51
+msgid "set attr prefix, default value is %q"
+msgstr "设置属性前缀，默认值是 %q"
+
+#: ../main.go:52
+msgid "set template files' path"
+msgstr "设置模板文件的路径"
+
+#: ../main.go:53
+msgid "set template file name pattern"
+msgstr "设置模板文件名的正则模式"
+
+#: ../main.go:58
+msgid "set extract keywords"
+msgstr "设置抽取关键字"
+
+#: ../main.go:59
+msgid "set output path"
+msgstr "设置输出路径"
+
+#: ../main.go:63
+#, c-format
+msgid "Usage of %s:"
+msgstr "%s 的用法："
+
+#: ../main.go:69
+msgid "invalid pattern %q: %v"
+msgstr "无法识别的模式 %q: %v"
+
+#: ../main.go:111
+msgid "can not parse templates: path=%s, pattern=%s, err=%+v"
+msgstr "无法解析模板：路径=%s, 正则=%s, err=%+v"
+
+#: ../main.go:114
+#, c-format
+msgid "path: %s, pattern: %s"
+msgstr "路径：%s, 正则：%s"
+
+#: ../main.go:116
+#, c-format
+msgid "extract from file: %s"
+msgstr "从文件抽取翻译：%s"
+
+#: ../main.go:317
+msgid "can not open file %q: %v"
+msgstr "无法打开文件 %q: %v"
+
+#: ../main.go:320
+#, c-format
+msgid "saved to %s"
+msgstr "已保存到 %s"
+
+#: ../main.go:324
+msgid ""
+"default output to stdout, if you want save to a file, please run with `-"
+"output <file>`"
+msgstr "默认输出到标准输出，如果想保存到文件，请带 `-output <文件名>` 选项运行"
+
+#: ../models.go:90 ../models.go:109 ../models.go:116 ../models.go:146
+#: ../models.go:153
+msgid "invalid keywords: %q. msg id index is not a number %q: %w"
+msgstr "无法识别的关键字：%q. 翻译文本位置不是数字 %q: %w"
+
+#: ../models.go:102 ../models.go:139
+msgid "invalid keywords: %q. context index is not a number %q: %w"
+msgstr "无法识别的关键字：%q. 上下文文本位置不是数字 %q: %w"
+
+#: ../models.go:123
+msgid "invalid keywords: %q. msg plural index is not a number %q: %w"
+msgstr "无法识别的关键字：%q. 复数文本位置不是数字 %q: %w"
+
+#: ../models.go:133
+msgid "invalid keywords: %q. context index must end with 'c': %q"
+msgstr "无法识别的关键字：%q. 上下文文本位置必须以字符 'c' 结尾: %q"
+
+#: ../models.go:158
+msgid "invalid keywords: %q. tow much keyword index"
+msgstr "无法识别的关键字：%q. 位置参数太多"

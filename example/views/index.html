@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title :replace="base/header.html">
+        <!-- /* 通过文件全路径引用整个文件 */ -->
+        Document
+    </title>
+</head>
+
+<body>
+    <p :text="${(t['T'])('How are you')}">How ary you!</p>
+    <p :text="${__('Hello, World!')}">Hello, World~</p>
+    <p :text="${_x('say hello', 'Hello, %s!', name)}">Say hello to sb.</p>
+    <p :text="${_n('One apple', '%d apples', number, number)}">How much apples?</p>
+    <p :text="${_xn('count',
+    '%[1]s have one apple',
+    '%[1]s have %[2]d apples',
+    number, name, number)}">How much apples in context?</p>
+    <p :text="${number>0?'greater than zero':'<=0'}"></p>
+    <footer :insert="common-footer">
+        <!-- /* 引用指定名字的模板 */ -->
+        Footer
+    </footer>
+</body>
+
+</html>

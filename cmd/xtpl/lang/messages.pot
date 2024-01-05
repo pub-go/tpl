@@ -1,0 +1,112 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-04 20:27+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../main.go:43
+#, c-format
+msgid "set tags that only contains text, default value is %s"
+msgstr ""
+
+#: ../main.go:46
+#, c-format
+msgid ""
+"set void elements which can not contains any child value, default value is %s"
+msgstr ""
+
+#: ../main.go:49
+msgid "set tag prefix, default value is %q"
+msgstr ""
+
+#: ../main.go:51
+msgid "set attr prefix, default value is %q"
+msgstr ""
+
+#: ../main.go:52
+msgid "set template files' path"
+msgstr ""
+
+#: ../main.go:53
+msgid "set template file name pattern"
+msgstr ""
+
+#: ../main.go:58
+msgid "set extract keywords"
+msgstr ""
+
+#: ../main.go:59
+msgid "set output path"
+msgstr ""
+
+#: ../main.go:63
+#, c-format
+msgid "Usage of %s:"
+msgstr ""
+
+#: ../main.go:69
+msgid "invalid pattern %q: %v"
+msgstr ""
+
+#: ../main.go:111
+msgid "can not parse templates: path=%s, pattern=%s, err=%+v"
+msgstr ""
+
+#: ../main.go:114
+#, c-format
+msgid "path: %s, pattern: %s"
+msgstr ""
+
+#: ../main.go:116
+#, c-format
+msgid "extract from file: %s"
+msgstr ""
+
+#: ../main.go:317
+msgid "can not open file %q: %v"
+msgstr ""
+
+#: ../main.go:320
+#, c-format
+msgid "saved to %s"
+msgstr ""
+
+#: ../main.go:324
+msgid ""
+"default output to stdout, if you want save to a file, please run with `-"
+"output <file>`"
+msgstr ""
+
+#: ../models.go:90 ../models.go:109 ../models.go:116 ../models.go:146
+#: ../models.go:153
+msgid "invalid keywords: %q. msg id index is not a number %q: %w"
+msgstr ""
+
+#: ../models.go:102 ../models.go:139
+msgid "invalid keywords: %q. context index is not a number %q: %w"
+msgstr ""
+
+#: ../models.go:123
+msgid "invalid keywords: %q. msg plural index is not a number %q: %w"
+msgstr ""
+
+#: ../models.go:133
+msgid "invalid keywords: %q. context index must end with 'c': %q"
+msgstr ""
+
+#: ../models.go:158
+msgid "invalid keywords: %q. tow much keyword index"
+msgstr ""

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title :text="${__('Title')}">Document</title>
+</head>
+<body>
+    <p :text="${t.T('How are you?')}">How are you</p>
+    <p :text="${t['X']('fine','I\'m fine.')}">I'm fine</p>
+    <p :text="${(t.T)('And you?')}">And you</p>
+    <p :text="${__('Hello, %s', name)}">Hello, Tom</p>
+    <p :text="${_x('post new', 'Post')}">Post New</p>
+    <p :text="${_x('posts', 'Post')}">No Post</p>
+    <p :text="${_n('One Apple', '%d Apples', 2, 2)}">2 Apples</p>
+    <p :text="${_xn('ctx', 'One Book', '%d Books', 2, 2)}">2 Books</p>
+</body>
+</html>
