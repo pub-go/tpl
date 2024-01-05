@@ -51,8 +51,9 @@ err := render.Render(writer)
 ### Codes
 ```go
 import (
+	"code.gopub.tech/tpl/exp"
+	"code.gopub.tech/tpl/types"
 	"github.com/youthlin/t"
-	"github.com/youthlin/t/exp"
 )
 
 err = tpl.Execute(writer, withI18n(req, map[string]any{
