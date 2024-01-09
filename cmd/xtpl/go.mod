@@ -2,10 +2,8 @@ module code.gopub.tech/tpl/cmd/xtpl
 
 go 1.21.0
 
-replace code.gopub.tech/tpl => ../../
-
 require (
-	code.gopub.tech/tpl v0.0.0-00010101000000-000000000000
+	code.gopub.tech/tpl v0.0.0-20240105152312-ac7d66edfae0
 	github.com/antlr4-go/antlr/v4 v4.13.0
 	github.com/youthlin/t v0.0.8
 )
