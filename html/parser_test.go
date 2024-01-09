@@ -1,7 +1,6 @@
 package html
 
 import (
-	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -21,7 +20,6 @@ func TestParser_ParseTokens(t *testing.T) {
 	p := NewParser()
 	node, err := p.ParseTokens(tokens)
 	t.Logf("node=%v, %s, err=%v", node, n2s(node), err)
-	slog.Info("test end")
 }
 
 func n2s(node *Node) string {

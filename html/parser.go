@@ -2,7 +2,6 @@ package html
 
 import (
 	"fmt"
-	"log/slog"
 	"strings"
 )
 
@@ -50,7 +49,6 @@ func (p *Parser) ParseTokens(tokens []*Token) (*Node, error) {
 			switch {
 			case tag.IsClose() || isVoid: // 是闭合标签或空标签
 				if tag.IsSelfClose() || isVoid { // 是自闭合标签或空标签
-					slog.Debug("add child", "close tag", tag.Name)
 					// <!doctype>, <name />
 					// 直接往 node 的子标签列表中添加即可
 					node.Children = append(node.Children, &Node{
@@ -58,7 +56,6 @@ func (p *Parser) ParseTokens(tokens []*Token) (*Node, error) {
 						Parent: node,
 					})
 				} else { // 是闭合标签 但不是自闭合标签 </div>
-					slog.Debug("node close", "close tag", tag.Name)
 					node.End = token   // node 结束
 					node = node.Parent // 将 node 指向父节点
 					// 示例 <html><head></head><body> 当前处理 </head>
@@ -66,7 +63,6 @@ func (p *Parser) ParseTokens(tokens []*Token) (*Node, error) {
 					// 以便下一次循环将 body 添加到 html 的字标签列表里
 				}
 			default: // Tag Open
-				slog.Debug("add open tag", "tag", tag.Name)
 				n := &Node{
 					Token:  token,
 					Parent: node,
@@ -82,7 +78,6 @@ func (p *Parser) ParseTokens(tokens []*Token) (*Node, error) {
 		case TokenKindCDATA:
 			fallthrough
 		case TokenKindText:
-			slog.Debug("add child", "value", token.Value)
 			node.Children = append(node.Children, &Node{
 				Token:  token,
 				Parent: node,
