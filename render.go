@@ -36,22 +36,45 @@ func RenderToString(tpl types.Template, data any) (string, error) {
 //		c.Render(http.StatusOK, r.Instance("index.html", gin.H{}))
 //	})
 //	ginS.Run()
-func NewHTMLRender(builder types.Factory, hotReload bool) (types.HTMLRender, error) {
+func NewHTMLRender(builder types.Factory, opts ...NewHTMLRenderOpt) (types.ReloadableRender, error) {
+	opt := &newHtmlRenderOpt{}
+	for _, setter := range opts {
+		setter(opt)
+	}
 	m, err := builder()
 	if err != nil {
 		return nil, err
 	}
 	return &htmlRender{
-		hotReload: hotReload,
+		hotReload: opt.hotReload,
 		builder:   builder,
 		manager:   m,
 	}, nil
+}
+
+type newHtmlRenderOpt struct {
+	hotReload bool
+}
+type NewHTMLRenderOpt func(*newHtmlRenderOpt)
+
+func WithHotReload(hotReload bool) NewHTMLRenderOpt {
+	return func(o *newHtmlRenderOpt) { o.hotReload = hotReload }
 }
 
 type htmlRender struct {
 	hotReload bool
 	builder   types.Factory
 	manager   types.TemplateManager
+}
+
+// Reload implements types.ReloadableRender.
+func (h *htmlRender) Reload() error {
+	m, err := h.builder()
+	if err != nil {
+		return nil
+	}
+	h.manager = m
+	return nil
 }
 
 // Instance implements types.HTMLRender.

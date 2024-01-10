@@ -27,6 +27,10 @@ type (
 		Instance(string, any) Render
 		GetTemplate(string) (Template, error)
 	}
+	ReloadableRender interface {
+		HTMLRender
+		Reload() error
+	}
 
 	// Render interface is to be implemented by JSON, XML, HTML, YAML and so on.
 	// see gin doc
