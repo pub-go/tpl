@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"io"
 	"net/http"
 )
@@ -18,18 +19,18 @@ type (
 	}
 
 	// Factory 模板管理器工厂
-	Factory func() (TemplateManager, error)
+	Factory func(ctx context.Context) (TemplateManager, error)
 
 	// HTMLRender interface is to be implemented by HTMLProduction and HTMLDebug.
 	// see gin doc
 	HTMLRender interface {
 		// Instance returns an HTML instance.
-		Instance(string, any) Render
-		GetTemplate(string) (Template, error)
+		Instance(context.Context, string, any) Render
+		GetTemplate(context.Context, string) (Template, error)
 	}
 	ReloadableRender interface {
 		HTMLRender
-		Reload() error
+		Reload(ctx context.Context) error
 	}
 
 	// Render interface is to be implemented by JSON, XML, HTML, YAML and so on.

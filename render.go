@@ -1,6 +1,7 @@
 package tpl
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -41,7 +42,7 @@ func NewHTMLRender(builder types.Factory, opts ...NewHTMLRenderOpt) (types.Reloa
 	for _, setter := range opts {
 		setter(opt)
 	}
-	m, err := builder()
+	m, err := builder(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +69,8 @@ type htmlRender struct {
 }
 
 // Reload implements types.ReloadableRender.
-func (h *htmlRender) Reload() error {
-	m, err := h.builder()
+func (h *htmlRender) Reload(ctx context.Context) error {
+	m, err := h.builder(ctx)
 	if err != nil {
 		return nil
 	}
@@ -78,8 +79,8 @@ func (h *htmlRender) Reload() error {
 }
 
 // Instance implements types.HTMLRender.
-func (h *htmlRender) Instance(tplName string, data any) types.Render {
-	tpl, err := h.GetTemplate(tplName)
+func (h *htmlRender) Instance(ctx context.Context, tplName string, data any) types.Render {
+	tpl, err := h.GetTemplate(ctx, tplName)
 	if err != nil {
 		return &render{
 			err: err,
@@ -92,13 +93,13 @@ func (h *htmlRender) Instance(tplName string, data any) types.Render {
 }
 
 // GetTemplate implements types.HTMLRender.
-func (h *htmlRender) GetTemplate(tplName string) (types.Template, error) {
+func (h *htmlRender) GetTemplate(ctx context.Context, tplName string) (types.Template, error) {
 	var (
 		m   = h.manager
 		err error
 	)
 	if h.hotReload {
-		m, err = h.builder()
+		m, err = h.builder(ctx)
 	}
 	if err != nil {
 		return nil, err
