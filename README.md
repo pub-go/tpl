@@ -1,4 +1,6 @@
 # tpl
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpub-go%2Ftpl.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpub-go%2Ftpl?ref=badge_shield)
+
 template like thymeleaf
 
 ## 模板 Templates
@@ -96,3 +98,7 @@ see [xtpl](./cmd/xtpl/)
 go install code.gopub.tech/tpl/cmd/xtpl@latest
 xtpl -help
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpub-go%2Ftpl.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpub-go%2Ftpl?ref=badge_large)
