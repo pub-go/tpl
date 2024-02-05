@@ -1,6 +1,7 @@
 package tpl
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"strings"
@@ -13,6 +14,13 @@ func RenderToString(tpl types.Template, data any) (string, error) {
 	var sb strings.Builder
 	err := tpl.Execute(&sb, data)
 	return sb.String(), err
+}
+
+// RenderToString 执行一个模板 并将结果输出为字节数组
+func RenderToBytes(tpl types.Template, data any) ([]byte, error) {
+	var sb bytes.Buffer
+	err := tpl.Execute(&sb, data)
+	return sb.Bytes(), err
 }
 
 // NewHTMLRender 新建一个 HTML 渲染器

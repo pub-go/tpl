@@ -1,6 +1,9 @@
 package html
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func Test_extractRange(t *testing.T) {
 	type args struct {
@@ -40,4 +43,42 @@ func Test_extractRange(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWith(t *testing.T) {
+	tests := []struct {
+		input string
+		data  any
+		want  string
+	}{
+		{
+			input: `<t:block :with="a:=${1}" :if="${a==1}"><span :text="${a}"></span></t:block>`,
+			data:  map[string]any{},
+			want:  `<span>1</span>`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			tz := NewHtmlScanner(strings.NewReader(tt.input))
+			tokens, err := tz.GetAllTokens()
+			if err != nil {
+				t.Errorf("scanner err: %+v", err)
+			}
+			tree, err := NewParser().ParseTokens(tokens)
+			if err != nil {
+				t.Errorf("parse err: %+v", err)
+			}
+			m := NewTplManager()
+			tpl := NewTemplate(m, "index.html", tree)
+			var sb strings.Builder
+			err = tpl.Execute(&sb, tt.data)
+			if err != nil {
+				t.Errorf("execute err: %+v", err)
+			}
+			if sb.String() != tt.want {
+				t.Errorf("got=%v, want=%v", sb.String(), tt.want)
+			}
+		})
+	}
+
 }

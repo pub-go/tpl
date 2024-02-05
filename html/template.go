@@ -58,7 +58,7 @@ type executeOption struct {
 func nop(w io.Writer) error { return nil }
 
 // execute 执行节点
-func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *executeOption) error {
+func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *executeOption) (err error) {
 	if tree == nil {
 		return nil
 	}
@@ -74,7 +74,8 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 	if token != nil { // root doc is nil
 		switch token.Kind {
 		case TokenKindTag: // tag 标签
-			if err := t.processTagStart(tree, tokenBuf, data, opt); err != nil {
+			data, err = t.processTagStart(tree, tokenBuf, data, opt)
+			if err != nil {
 				return errors.Errorf("failed to process tag [%v](from postion %v to %v): %w",
 					token.Value, token.Start, token.End, err)
 			}
@@ -121,10 +122,12 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 }
 
 // processTagStart 处理开始标签
-func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
+func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
+	data exp.Scope, opt *executeOption) (newScope exp.Scope, err error) {
+
 	tag := node.Token.Tag
 	if tag == nil {
-		return ErrNilTag
+		return data, ErrNilTag
 	}
 	tagName := strings.ToLower(tag.Name)
 	if tagName == t.manager.tagPrefix+tagNameBlock {
@@ -182,13 +185,19 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 		if strings.HasPrefix(an, attrPrefix) { // 指令属性
 			cmd := strings.TrimPrefix(an, attrPrefix)
 			switch cmd {
+			case attrWith: // 赋值
+				name, result, err := attr.WithAssign(data)
+				if err != nil {
+					return data, err
+				}
+				data = exp.Combine(exp.NewScope(map[string]any{name: result}), data)
 			case attrIf, attrElse_If, attrElseIf, attrElIf, attrElse: // 条件控制
 				if err := t.processIfElse(node, attr, tokenBuf, data, opt); err != nil {
-					return err
+					return data, err
 				}
 			case attrRange: // 循环
 				if err := t.processRange(node, attr, tokenBuf, data, opt); err != nil {
-					return err
+					return data, err
 				}
 			case attrRemove: // 移除
 				t.processRemoveAttr(node, attr, data, opt)
@@ -214,21 +223,21 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 			case attrInsert: // insert=插入组件作为内容
 				name, err := attr.Evaluate(data)
 				if err != nil {
-					return err
+					return data, err
 				}
 				tplNode, ok := t.manager.templates[name]
 				if !ok {
-					return errors.Errorf(noSuchTemplate+":%w", name, ErrTplNotFound)
+					return data, errors.Errorf(noSuchTemplate+":%w", name, ErrTplNotFound)
 				}
 				tpl := NewTemplate(t.manager, name, tplNode)
 				if err := tpl.execute(tplNode, tagContentBuf, data, nil); err != nil {
-					return errors.Errorf("failed to %v template `%v` at %v: %w",
+					return data, errors.Errorf("failed to %v template `%v` at %v: %w",
 						cmd, name, attr.ValueStart, err)
 				}
 			default: // 其他指令 替换普通属性
 				result, err := attr.Evaluate(data)
 				if err != nil {
-					return err
+					return data, err
 				}
 				result = html.EscapeString(result)
 				result = fmt.Sprintf(" %v=%q", cmd, result)
@@ -250,7 +259,7 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 	writeToBuf(opt, tagBuf, ">")
 	writeToBuf(opt, tagBuf, tagContentBuf.String())
 	writeToBuf(opt, tokenBuf, tagBuf.String())
-	return nil
+	return data, nil
 }
 
 func writeToBuf(opt *executeOption, buf *strings.Builder, data string) {

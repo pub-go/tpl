@@ -47,6 +47,7 @@ func (t *Tag) AttrMap() map[string]*Attr {
 func (t *Tag) SortedAttr(prefix string) []*Attr {
 	if t.sorted != len(t.Attrs) {
 		weight := map[string]int{
+			attrWith:   -4,
 			attrIf:     -3,
 			attrRange:  -2,
 			attrRemove: -1,

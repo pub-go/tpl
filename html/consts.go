@@ -7,6 +7,7 @@ const (
 
 const (
 	tagNameBlock = "block"   // <block>只输出子内容的标签</block>
+	attrWith     = "with"    // <div :with="a := ${cond}">满足条件时才会输出本节点</div>
 	attrIf       = "if"      // <div :if="${cond}">满足条件时才会输出本节点</div>
 	attrElse_If  = "else-if" // 前一个tag必须含 if 属性，前一个节点不满足条件时会判断本节点
 	attrElseIf   = "elseif"  // 同上
