@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp"
 )
 
@@ -947,4 +948,12 @@ func TestNewVisitor(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestExp(t *testing.T) {
+	tree, err := exp.ParseCode(`1=`)
+	if !errors.Is(err, exp.ErrInputTooLong) {
+		t.Errorf("want ErrInputTooLong got %+v", err)
+	}
+	t.Logf("tree=%v, err=%+v", exp.TreesToString(tree), err)
 }

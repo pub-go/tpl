@@ -1,10 +1,14 @@
 package exp
 
 import (
+	"fmt"
+
 	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp/parser"
 	"github.com/antlr4-go/antlr/v4"
 )
+
+var ErrInputTooLong = fmt.Errorf("input too long")
 
 // ParseCode 解析代码为语法树
 func ParseCode(input string, opts ...parseCodeOpt) (tree parser.IExpressionContext, err error) {
@@ -23,10 +27,19 @@ func ParseCode(input string, opts ...parseCodeOpt) (tree parser.IExpressionConte
 	lexer.AddErrorListener(errListener)
 
 	// 语法分析
-	p := parser.NewGoExpression(antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel))
+	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+	p := parser.NewGoExpression(stream)
 	p.RemoveErrorListeners()
 	p.AddErrorListener(errListener)
-	return p.Expression(), errListener.Err()
+
+	tree = p.Expression()
+	index := stream.Index()
+	last := stream.Get(index)
+	if last.GetTokenType() != antlr.TokenEOF {
+		err = errors.Wrapf(ErrInputTooLong, "at index=%v token=%v", index, last)
+		errListener.errors = append(errListener.errors, err)
+	}
+	return tree, errListener.Err()
 }
 
 type parseCodeOpt func(*parseCodeOption)

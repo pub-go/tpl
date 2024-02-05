@@ -3,29 +3,36 @@ package exp
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"time"
 )
 
 var defaultScope = NewScope(map[string]any{
-	"true":    true,
-	"false":   false,
-	"string":  ToString,
-	"bytes":   ToBytes,
-	"runes":   ToRunes,
-	"int":     ToNumber[int],
-	"int8":    ToNumber[int8],
-	"int16":   ToNumber[int16],
-	"int32":   ToNumber[int32],
-	"int64":   ToNumber[int64],
-	"uint":    ToNumber[uint],
-	"uint8":   ToNumber[uint8],
-	"uint16":  ToNumber[uint16],
-	"uint32":  ToNumber[uint32],
-	"uint64":  ToNumber[uint64],
-	"float32": ToNumber[float32],
-	"float64": ToNumber[float64],
-	"isNil":   func(a any) bool { return a == nil },
-	"printf":  func(format string, args ...any) string { return fmt.Sprintf(format, args...) },
-	"println": func(a ...any) string { return fmt.Sprintln(a...) },
+	"true":     true,
+	"false":    false,
+	"string":   ToString,
+	"bytes":    ToBytes,
+	"runes":    ToRunes,
+	"int":      ToNumber[int],
+	"int8":     ToNumber[int8],
+	"int16":    ToNumber[int16],
+	"int32":    ToNumber[int32],
+	"int64":    ToNumber[int64],
+	"uint":     ToNumber[uint],
+	"uint8":    ToNumber[uint8],
+	"uint16":   ToNumber[uint16],
+	"uint32":   ToNumber[uint32],
+	"uint64":   ToNumber[uint64],
+	"float32":  ToNumber[float32],
+	"float64":  ToNumber[float64],
+	"duration": func(a any) time.Duration { return time.Duration(ToNumber[int64](a)) },
+	"isNil":    func(a any) bool { return a == nil },
+	"isNull":   func(a any) bool { return reflect.ValueOf(a).IsNil() },
+	"len":      func(a any) int { return reflect.ValueOf(a).Len() },
+	"cap":      func(a any) int { return reflect.ValueOf(a).Cap() },
+	"print":    func(args ...any) string { return fmt.Sprint(args...) },
+	"printf":   func(format string, args ...any) string { return fmt.Sprintf(format, args...) },
+	"println":  func(a ...any) string { return fmt.Sprintln(a...) },
 })
 var _ Scope = (*scope)(nil)
 
