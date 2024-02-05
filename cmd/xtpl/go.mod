@@ -1,6 +1,6 @@
 module code.gopub.tech/tpl/cmd/xtpl
 
-go 1.21.0
+go 1.18
 
 require (
 	code.gopub.tech/tpl v0.0.0-20240105152312-ac7d66edfae0

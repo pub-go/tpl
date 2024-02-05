@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp"
 )
 
@@ -24,7 +25,7 @@ type Attr struct {
 // Evaluate 在给定的作用域上计算属性值
 func (a *Attr) Evaluate(input exp.Scope) (string, error) {
 	if a.Value == nil {
-		return "", fmt.Errorf(attrShouldHaveValue+": %w",
+		return "", errors.Errorf(attrShouldHaveValue+": %w",
 			a.Name, a.NameEnd, ErrAttrValueExpected)
 	}
 	if len(a.ValueTokens) == 0 {
@@ -40,7 +41,7 @@ func (a *Attr) Evaluate(input exp.Scope) (string, error) {
 		case CodeValue:
 			result, err := exp.Evaluate(tok.Start, tok.Tree, input)
 			if err != nil {
-				return "", fmt.Errorf("failed to evaluate %v attribute [%v]: %w",
+				return "", errors.Errorf("failed to evaluate %v attribute [%v]: %w",
 					a.Name, *a.Value, err)
 			}
 			buf.WriteString(fmt.Sprintf("%v", result))

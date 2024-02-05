@@ -3,11 +3,11 @@ package html
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/logs"
 	"code.gopub.tech/tpl/exp"
 	"code.gopub.tech/tpl/exp/parser"
@@ -279,7 +279,7 @@ func (t *CodeScanner) scanString() (string, error) {
 		} else { // ' " 需要处理转义
 			if ch == '\\' { // 转义
 				if err := t.NextRune(); err != nil {
-					return raw.String(), fmt.Errorf("read string failed (from position %v to %v): %w",
+					return raw.String(), errors.Errorf("read string failed (from position %v to %v): %w",
 						start, t.pos, err)
 				}
 				raw.WriteRune(t.ch) // \"

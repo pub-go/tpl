@@ -2,11 +2,12 @@ package html
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"unicode"
+
+	"code.gopub.tech/errors"
 )
 
 // ErrUnexpectedEOF 非预期的 EOF. 读取标签过程中遇到 EOF 时会返回
@@ -140,7 +141,7 @@ func (t *HtmlScanner) readText() (tok *Token, err error) {
 					End:   t.pos,
 				}), nil
 			}
-			return nil, fmt.Errorf("read text failed from position %v to %v: %w",
+			return nil, errors.Errorf("read text failed from position %v to %v: %w",
 				start, t.pos, err)
 		}
 		ch := t.ch
@@ -257,7 +258,7 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 			if errors.Is(err, io.EOF) {
 				value := buf.String()
 				// read tag 期间不应该提前结束 返回错误
-				err = fmt.Errorf("read tag %q failed (from position %v to %v): %w",
+				err = errors.Errorf("read tag %q failed (from position %v to %v): %w",
 					value, start, t.pos, ErrUnexpectedEOF)
 			}
 			t.err = err // 记录错误
@@ -301,20 +302,20 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 			isEnd := strings.HasSuffix(text, "-->")
 			text = strings.TrimSuffix(text, "-->")
 			if strings.HasPrefix(text, ">") || strings.HasPrefix(text, "->") {
-				err = fmt.Errorf(`read comment failed (from position %v to %v): comment text must not start with ">" or "->": %s`,
+				err = errors.Errorf(`read comment failed (from position %v to %v): comment text must not start with ">" or "->": %s`,
 					start, t.pos, text)
 				t.err = err
 				return nil, err
 			}
 			if isEnd {
 				if strings.Contains(text, "<!--") || strings.Contains(text, "-->") || strings.Contains(text, "--!>") {
-					err = fmt.Errorf(`read comment failed (from position %v to %v): comment text must not contains "<!--", "-->" or "--!>": %s`,
+					err = errors.Errorf(`read comment failed (from position %v to %v): comment text must not contains "<!--", "-->" or "--!>": %s`,
 						start, t.pos, text)
 					t.err = err
 					return nil, err
 				}
 				if strings.HasSuffix(text, "<!-") {
-					err = fmt.Errorf(`read comment failed (from position %v to %v): comment text must not end with "<!-": %s`,
+					err = errors.Errorf(`read comment failed (from position %v to %v): comment text must not end with "<!-": %s`,
 						start, t.pos, text)
 					t.err = err
 					return nil, err

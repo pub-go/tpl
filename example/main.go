@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"fmt"
 	"net/http"
 	"os"
 
@@ -13,7 +12,6 @@ import (
 	"code.gopub.tech/tpl/html"
 	"code.gopub.tech/tpl/types"
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/render"
 	"github.com/youthlin/t"
 )
 
@@ -31,7 +29,8 @@ func main() {
 }
 
 func buildTpl(hotReload bool) (types.HTMLRender, error) {
-	return tpl.NewHTMLRender(func() (types.TemplateManager, error) {
+	return tpl.NewHTMLRender(func(ctx context.Context) (types.TemplateManager, error) {
+		logs.Info(ctx, "load templates...")
 		m := html.NewTplManager()
 		if hotReload {
 			// 使用 os.DirFS 实时读取文件夹
@@ -39,7 +38,7 @@ func buildTpl(hotReload bool) (types.HTMLRender, error) {
 		}
 		// 使用编译时嵌入的 embed.FS 资源
 		return m, m.SetSubFS("views").ParseWithSuffix(views, ".html")
-	}, hotReload)
+	}, tpl.WithHotReload(hotReload))
 }
 
 func std() {
@@ -48,13 +47,20 @@ func std() {
 		panic(err)
 	}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		err := m.Instance("index.html", withI18n(r, types.M{
+		ctx := r.Context()
+		data := withI18n(r, types.M{
 			"title":  "Welcome",
 			"name":   "Tom",
 			"number": 2,
-		})).Render(w)
+		})
+		err := m.Instance(ctx, "index.html", data).Render(w)
+		// Or:
+		// tpl, err := m.GetTemplate(ctx, "index.html")
+		// if err == nil {
+		// 	err = tpl.Execute(w, data)
+		// }
 		if err != nil {
-			fmt.Printf("err: %v", err)
+			logs.Error(ctx, "err: %+v", err)
 		}
 	})
 	http.ListenAndServe(":9999", nil)
@@ -62,7 +68,7 @@ func std() {
 
 func withI18n(r *http.Request, data types.M) types.M {
 	lang := t.GetUserLang(r)
-	fmt.Printf("lang=%v %+v\n", lang, r.Header)
+	logs.Info(r.Context(), "lang=%v %+v", lang, r.Header)
 	t := t.L(lang)
 	if data == nil {
 		data = types.M{}
@@ -79,33 +85,21 @@ func withI18n(r *http.Request, data types.M) types.M {
 	return data
 }
 
-type htmlRender struct {
-	types.HTMLRender
-}
-
-func (h htmlRender) Instance(s string, a any) render.Render {
-	return h.HTMLRender.Instance(s, a)
-}
-
 func useGin() {
 	r, err := buildTpl(gin.IsDebugging())
 	if err != nil {
 		panic(err)
 	}
-
-	if err != nil {
-		panic(err)
-	}
 	engine := gin.Default()
-	engine.HTMLRender = htmlRender{HTMLRender: r}
 	engine.GET("/", func(c *gin.Context) {
+		ctx := c.Request.Context()
 		data := withI18n(c.Request, types.M{
 			"title":  "Welcome",
 			"name":   "Tom",
 			"number": 2,
 		})
-		c.HTML(http.StatusOK, "index.html", data)
-		// c.Render(http.StatusOK, r.Instance("index.html", data))
+		tpl := r.Instance(ctx, "index.html", data)
+		c.Render(http.StatusOK, tpl)
 	})
 	engine.Run(":9998")
 }

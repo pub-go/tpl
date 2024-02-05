@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp/parser"
 	"github.com/antlr4-go/antlr/v4"
 )
@@ -33,7 +34,7 @@ type visitor struct {
 func (v *visitor) Evaluate(tree antlr.ParseTree) (result any, err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = fmt.Errorf("recovered from panic: %v", x)
+			err = errors.Errorf("recovered from panic: %v", x)
 		}
 	}()
 	return tree.Accept(v), v.GetError()
@@ -50,25 +51,26 @@ func (v *visitor) SetError(ctx antlr.ParserRuleContext, format string, args ...a
 	line, column := start.GetLine(), start.GetColumn()
 	endLine, endColumn := stop.GetLine(), stop.GetColumn()
 	if line == endLine && column == endColumn {
-		v.error = fmt.Errorf("evaluate code failed: ```%v```, at position %v: %w",
-			ctx.GetText(), v.Pos.Add(line, column), fmt.Errorf(format, args...),
+		v.error = errors.Errorf("evaluate code failed: ```%v```, at position %v: %w",
+			ctx.GetText(), v.Pos.Add(line, column), errors.Errorf(format, args...),
 		)
 	} else {
-		v.error = fmt.Errorf("evaluate code failed: ```%v```, from position %v to %v: %w",
+		v.error = errors.Errorf("evaluate code failed: ```%v```, from position %v to %v: %w",
 			ctx.GetText(), v.Pos.Add(line, column), v.Pos.Add(endLine, endColumn),
-			fmt.Errorf(format, args...),
+			errors.Errorf(format, args...),
 		)
 	}
 	return nil
 }
 
 func (v *visitor) SetErrorOnToken(token antlr.Token, format string, args ...any) any {
-	v.error = fmt.Errorf("evaluate code failed at position %v: %w",
+	v.error = errors.Errorf("evaluate code failed at position %v: %w",
 		v.Pos.Add(token.GetLine(), token.GetColumn()),
-		fmt.Errorf(format, args...),
+		errors.Errorf(format, args...),
 	)
 	return nil
 }
+
 func (v *visitor) VisitExpression(ctx *parser.ExpressionContext) any {
 	if v.error != nil {
 		return nil
@@ -175,7 +177,7 @@ func (v *visitor) VisitPrimaryExpr(ctx *parser.PrimaryExprContext) any {
 				if i, ok := val.(int64); ok {
 					return i, nil
 				} else {
-					return 0, fmt.Errorf("expected integer, got %T(%v)", val, val)
+					return 0, errors.Errorf("expected integer, got %T(%v)", val, val)
 				}
 			}
 			if len(sctx.AllCOLON()) == 1 {
@@ -334,7 +336,7 @@ func (v *visitor) VisitLiteral(ctx *parser.LiteralContext) any {
 		}
 		t, err := strconv.Unquote(text) // 去除引号
 		if err != nil {
-			panic(fmt.Errorf("unquote error(%s): %w", text, err))
+			panic(errors.Errorf("unquote error(%s): %w", text, err))
 		}
 		return t
 	case ctx.LiteralFloat() != nil:

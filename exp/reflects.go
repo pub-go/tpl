@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
+
+	"code.gopub.tech/errors"
 )
 
 var ErrNoSuchValue = fmt.Errorf("no such value")
@@ -18,7 +20,7 @@ func NameOfFunction(f interface{}) string {
 func getValue(name string, from any) (value any, err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = fmt.Errorf("cannot get `%v` from `%T`: %v", name, from, x)
+			err = errors.Errorf("cannot get `%v` from `%T`: %v", name, from, x)
 		}
 	}()
 	rv := reflect.ValueOf(from)
@@ -37,10 +39,10 @@ func getValue(name string, from any) (value any, err error) {
 				if isPtr {
 					value = prv.MethodByName(name)
 					if isZero(value) { // 无指针方法
-						return nil, fmt.Errorf("field not found `%v` in *%v: %w", name, rv.Type(), ErrNoSuchValue)
+						return nil, errors.Errorf("field not found `%v` in *%v: %w", name, rv.Type(), ErrNoSuchValue)
 					}
 				} else {
-					return nil, fmt.Errorf("field not found `%v` in %v: %w", name, rv.Type(), ErrNoSuchValue)
+					return nil, errors.Errorf("field not found `%v` in %v: %w", name, rv.Type(), ErrNoSuchValue)
 				}
 			}
 		}
@@ -48,13 +50,13 @@ func getValue(name string, from any) (value any, err error) {
 	case reflect.Map:
 		value := rv.MapIndex(reflect.ValueOf(name))
 		if isZero(value) {
-			return nil, fmt.Errorf("key not found `%v`: %w", name, ErrNoSuchValue)
+			return nil, errors.Errorf("key not found `%v`: %w", name, ErrNoSuchValue)
 		}
 		return value.Interface(), nil
 	case reflect.Array, reflect.Slice:
 		idx, err := strconv.ParseInt(name, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("expected array index, but got `%s`: %w", name, err)
+			return nil, errors.Errorf("expected array index, but got `%s`: %w", name, err)
 		}
 		if idx < 0 {
 			idx = int64(rv.Len()) + idx
@@ -62,7 +64,7 @@ func getValue(name string, from any) (value any, err error) {
 		return rv.Index(int(idx)).Interface(), nil
 	default:
 	}
-	return nil, fmt.Errorf("`%s` not found in `%T`: %w", name, from, ErrNoSuchValue)
+	return nil, errors.Errorf("`%s` not found in `%T`: %w", name, from, ErrNoSuchValue)
 }
 
 // callFunc 反射调用函数
@@ -70,7 +72,7 @@ func callFunc(rv reflect.Value, in []reflect.Value) (out []reflect.Value, err er
 	defer func() {
 		if x := recover(); x != nil {
 			// reflect: Call with too many input arguments
-			err = fmt.Errorf("call function failed: %v", x)
+			err = errors.Errorf("call function failed: %v", x)
 		}
 	}()
 	return rv.Call(in), nil

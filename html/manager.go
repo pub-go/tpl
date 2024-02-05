@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp"
 	"code.gopub.tech/tpl/types"
 )
@@ -143,7 +144,7 @@ func (m *tplManager) Parse(fsys fs.FS, match func(path string) bool) (err error)
 // @param reader 文件内容
 func (m *tplManager) Add(fileName string, reader io.Reader) error {
 	if _, ok := m.templates[fileName]; ok {
-		return fmt.Errorf("failed to add template `%v`: %w",
+		return errors.Errorf("failed to add template `%v`: %w",
 			fileName, ErrDuplicatedTplName)
 	}
 	tz := NewHtmlScanner(reader).
@@ -151,12 +152,12 @@ func (m *tplManager) Add(fileName string, reader io.Reader) error {
 		SetAttrPrefix(m.attrPrefix)
 	tokens, err := tz.GetAllTokens()
 	if err != nil {
-		return fmt.Errorf("failed to read html tokens: %w", err)
+		return errors.Errorf("failed to read html tokens: %w", err)
 	}
 	p := NewParser().SetVoidElements(m.voidElements)
 	tree, err := p.ParseTokens(tokens)
 	if err != nil {
-		return fmt.Errorf("failed to parse html tokens: %w", err)
+		return errors.Errorf("failed to parse html tokens: %w", err)
 	}
 	m.files[fileName] = tree
 	m.templates[fileName] = tree
@@ -178,7 +179,7 @@ func (m *tplManager) addDefinedTpl(fileName string, tree *Node) error {
 			// <div>xxx</div>
 			tag := token.Tag
 			if tag == nil {
-				return fmt.Errorf("failed to add template in %v at %v %w",
+				return errors.Errorf("failed to add template in %v at %v: %w",
 					fileName, token.Start, ErrNilTag)
 			}
 			attr, ok := tag.AttrMap()[attrPrefix+attrDefine]
@@ -190,7 +191,7 @@ func (m *tplManager) addDefinedTpl(fileName string, tree *Node) error {
 				return err
 			}
 			if _, has := m.templates[tplName]; has {
-				return fmt.Errorf("failed to add template `%v` defined in %v at %v: %w",
+				return errors.Errorf("failed to add template `%v` defined in %v at %v: %w",
 					tplName, fileName, attr.ValueStart, ErrDuplicatedTplName)
 			}
 			m.templates[tplName] = &Node{ // 定义的模板不包括 :define 本身
@@ -228,7 +229,7 @@ func (m *tplManager) Templates() (result map[string]*Node) {
 func (m *tplManager) GetTemplate(name string) (types.Template, error) {
 	tree := m.templates[name]
 	if tree == nil {
-		return nil, fmt.Errorf(noSuchTemplate+": %w", name, ErrTplNotFound)
+		return nil, errors.Errorf(noSuchTemplate+": %w", name, ErrTplNotFound)
 	}
 	return NewTemplate(m, name, tree), nil
 }

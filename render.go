@@ -22,7 +22,7 @@ func RenderToString(tpl types.Template, data any) (string, error) {
 //
 //	var hotReload = gin.IsDebugging()
 //	// NewHTMLRender
-//	r, err := tpl.NewHTMLRender(func() (types.TemplateManager, error) {
+//	r, err := tpl.NewHTMLRender(func(context.Context) (types.TemplateManager, error) {
 //		m := html.NewTplManager()
 //		if hotReload {
 //			// 使用 os.DirFS 实时读取文件夹
@@ -30,11 +30,11 @@ func RenderToString(tpl types.Template, data any) (string, error) {
 //		}
 //		// 使用编译时嵌入的 embed.FS 资源
 //		return m, m.SetSubFS("views").ParseWithSuffix(views, ".html")
-//	}, hotReload)
+//	}, tpl.WithHotReload(hotReload))
 //
 //	ginS.Get("/", func(c *gin.Context) {
 //		// Instance
-//		c.Render(http.StatusOK, r.Instance("index.html", gin.H{}))
+//		c.Render(http.StatusOK, r.Instance(c, "index.html", gin.H{}))
 //	})
 //	ginS.Run()
 func NewHTMLRender(builder types.Factory, opts ...NewHTMLRenderOpt) (types.ReloadableRender, error) {
@@ -42,15 +42,11 @@ func NewHTMLRender(builder types.Factory, opts ...NewHTMLRenderOpt) (types.Reloa
 	for _, setter := range opts {
 		setter(opt)
 	}
-	m, err := builder(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return &htmlRender{
+	r := &htmlRender{
 		hotReload: opt.hotReload,
 		builder:   builder,
-		manager:   m,
-	}, nil
+	}
+	return r, r.Reload(context.Background()) // 首次 build 时无 ctx
 }
 
 type newHtmlRenderOpt struct {
@@ -58,6 +54,9 @@ type newHtmlRenderOpt struct {
 }
 type NewHTMLRenderOpt func(*newHtmlRenderOpt)
 
+// WithHotReload 当需要热加载时 每次渲染都会重新解析模板.
+// 出于性能考虑 应当仅在调试阶段开启;
+// 正式环境如需重新解析模板 可以通过下方 Reload 方法触发.
 func WithHotReload(hotReload bool) NewHTMLRenderOpt {
 	return func(o *newHtmlRenderOpt) { o.hotReload = hotReload }
 }
@@ -69,16 +68,18 @@ type htmlRender struct {
 }
 
 // Reload implements types.ReloadableRender.
+// 重新解析模板文件.
 func (h *htmlRender) Reload(ctx context.Context) error {
 	m, err := h.builder(ctx)
 	if err != nil {
-		return nil
+		return err
 	}
 	h.manager = m
 	return nil
 }
 
 // Instance implements types.HTMLRender.
+// 获取 Render 实例.
 func (h *htmlRender) Instance(ctx context.Context, tplName string, data any) types.Render {
 	tpl, err := h.GetTemplate(ctx, tplName)
 	if err != nil {
@@ -93,6 +94,7 @@ func (h *htmlRender) Instance(ctx context.Context, tplName string, data any) typ
 }
 
 // GetTemplate implements types.HTMLRender.
+// 获取一个模板实例.
 func (h *htmlRender) GetTemplate(ctx context.Context, tplName string) (types.Template, error) {
 	var (
 		m   = h.manager

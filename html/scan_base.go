@@ -2,10 +2,9 @@ package html
 
 import (
 	"bufio"
-	"errors"
-	"fmt"
 	"io"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/logs"
 	"code.gopub.tech/tpl/exp"
 )
@@ -72,6 +71,6 @@ func (b *BaseScanner) UnRead() {
 
 // Err 记录解析错误
 func (b *BaseScanner) Err(format string, a ...any) error {
-	b.err = fmt.Errorf(format, a...)
+	b.err = errors.Errorf(format, a...)
 	return b.err
 }

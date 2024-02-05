@@ -1,9 +1,10 @@
 package html
 
 import (
-	"fmt"
 	"sort"
 	"strings"
+
+	"code.gopub.tech/errors"
 )
 
 // Tag <标签> 如果是结束标签则 Name 以 / 开头
@@ -20,7 +21,7 @@ func (t *Tag) AddAttr(attr *Attr) error {
 		t.attrs = map[string]*Attr{}
 	}
 	if pre, has := t.attrs[attr.Name]; has {
-		return fmt.Errorf("duplicate attribute `%v` at %v, previous occured at %v",
+		return errors.Errorf("duplicate attribute `%v` at %v, previous occured at %v",
 			attr.Name, attr.NameStart, pre.NameStart)
 	}
 	t.attrs[attr.Name] = attr

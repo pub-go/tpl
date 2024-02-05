@@ -19,26 +19,24 @@ type (
 	}
 
 	// Factory 模板管理器工厂
+	// 因模板可以 reload, 当初始化时, ctx 是 background; 当 reload 时, ctx 是传入的当次请求的上下文.
 	Factory func(ctx context.Context) (TemplateManager, error)
 
-	// HTMLRender interface is to be implemented by HTMLProduction and HTMLDebug.
-	// see gin doc
-	HTMLRender interface {
-		// Instance returns an HTML instance.
-		Instance(context.Context, string, any) Render
-		GetTemplate(context.Context, string) (Template, error)
-	}
-	ReloadableRender interface {
-		HTMLRender
-		Reload(ctx context.Context) error
-	}
-
-	// Render interface is to be implemented by JSON, XML, HTML, YAML and so on.
-	// see gin doc
+	// Render 借用 gin 的接口 方便集成到 gin 中
 	Render interface {
 		// Render writes data with custom ContentType.
 		Render(http.ResponseWriter) error
 		// WriteContentType writes custom ContentType.
 		WriteContentType(w http.ResponseWriter)
+	}
+	// HTMLRender
+	HTMLRender interface {
+		Instance(context.Context, string, any) Render
+		GetTemplate(context.Context, string) (Template, error)
+	}
+	// ReloadableRender 支持重新解析模板的 HTMLRender
+	ReloadableRender interface {
+		HTMLRender
+		Reload(ctx context.Context) error
 	}
 )

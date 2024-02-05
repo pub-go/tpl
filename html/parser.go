@@ -1,8 +1,9 @@
 package html
 
 import (
-	"fmt"
 	"strings"
+
+	"code.gopub.tech/errors"
 )
 
 // Parser 文档树解析器
@@ -43,7 +44,7 @@ func (p *Parser) ParseTokens(tokens []*Token) (*Node, error) {
 		case TokenKindTag:
 			tag := token.Tag
 			if tag == nil {
-				return nil, fmt.Errorf("tag is nil: %v", token)
+				return nil, errors.Errorf("tag is nil: %v", token)
 			}
 			isVoid := p.isVoidElement(tag.Name)
 			switch {
@@ -83,7 +84,7 @@ func (p *Parser) ParseTokens(tokens []*Token) (*Node, error) {
 				Parent: node,
 			}) // 文本、注释、cdata 直接添加到当前 node 的字标签列表中即可
 		default:
-			return nil, fmt.Errorf("unexpected error token: %v", token)
+			return nil, errors.Errorf("unexpected error token: %v", token)
 		}
 	}
 	return doc, nil

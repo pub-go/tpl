@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp"
 	"code.gopub.tech/tpl/types"
 )
@@ -74,7 +75,7 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 		switch token.Kind {
 		case TokenKindTag: // tag 标签
 			if err := t.processTagStart(tree, tokenBuf, data, opt); err != nil {
-				return fmt.Errorf("failed to process tag [%v](from postion %v to %v): %w",
+				return errors.Errorf("failed to process tag [%v](from postion %v to %v): %w",
 					token.Value, token.Start, token.End, err)
 			}
 		case TokenKindComment: // 注释
@@ -217,11 +218,11 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder, da
 				}
 				tplNode, ok := t.manager.templates[name]
 				if !ok {
-					return fmt.Errorf(noSuchTemplate+":%w", name, ErrTplNotFound)
+					return errors.Errorf(noSuchTemplate+":%w", name, ErrTplNotFound)
 				}
 				tpl := NewTemplate(t.manager, name, tplNode)
 				if err := tpl.execute(tplNode, tagContentBuf, data, nil); err != nil {
-					return fmt.Errorf("failed to %v template `%v` at %v: %w",
+					return errors.Errorf("failed to %v template `%v` at %v: %w",
 						cmd, name, attr.ValueStart, err)
 				}
 			default: // 其他指令 替换普通属性
@@ -293,7 +294,7 @@ func (t *htmlTemplate) clearCurrentAttr(node *Node, a int) {
 func (t *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
 	an := attr.Name
 	if attr.Value == nil {
-		return fmt.Errorf(attrShouldHaveValue+": %w", an, attr.NameEnd, ErrAttrValueExpected)
+		return errors.Errorf(attrShouldHaveValue+": %w", an, attr.NameEnd, ErrAttrValueExpected)
 	}
 	if t.currentAttrIs(node, currentIsCond) {
 		return nil // 重新执行的 跳过
@@ -309,7 +310,7 @@ func (t *htmlTemplate) processIfElse(node *Node, attr *Attr, tokenBuf *strings.B
 	case "else-if", "elseif", "elif", "else":
 		p, ok := t.nodeCondition[node.GetPreviousSiblingTag()]
 		if !ok { // 前一个如果不是 if 就不能出现 else-if
-			return fmt.Errorf("unexpected `%v` attribute at %v", attr.Name, attr.NameStart)
+			return errors.Errorf("unexpected `%v` attribute at %v", attr.Name, attr.NameStart)
 		}
 		if !p { // 如果前一个节点是 false 才要计算本节点
 			return t.evaluateCondition(node, attr, tokenBuf, data)
@@ -339,7 +340,7 @@ func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 	an := attr.Name
 	av := attr.Value
 	if av == nil {
-		return fmt.Errorf(attrShouldHaveValue+": %w", an, attr.NameEnd, ErrAttrValueExpected)
+		return errors.Errorf(attrShouldHaveValue+": %w", an, attr.NameEnd, ErrAttrValueExpected)
 	}
 	attrValue := *av
 
@@ -356,13 +357,13 @@ func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 	attrValue = strings.TrimSuffix(attrValue, "\"")
 	indexName, itemName, objName, err := extractRange(attrValue)
 	if err != nil {
-		return fmt.Errorf("invalid syntax %v [%v] (at position %v to %v): %w",
+		return errors.Errorf("invalid syntax %v [%v] (at position %v to %v): %w",
 			an, *av, attr.ValueStart, attr.ValueEnd, err)
 	}
 	scope := exp.WithDefaultScope(data)
 	obj, err := scope.Get(objName)
 	if err != nil {
-		return fmt.Errorf("failed to process attribute `%v` at %v: %w", an, attr.ValueStart, err)
+		return errors.Errorf("failed to process attribute `%v` at %v: %w", an, attr.ValueStart, err)
 	}
 
 	var (
@@ -395,7 +396,7 @@ func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 			return nil, nil, false
 		}
 	default:
-		return fmt.Errorf("`%v` only supports array, slice, string or map, got %v: %v",
+		return errors.Errorf("`%v` only supports array, slice, string or map, got %v: %v",
 			an, rk, objName)
 	}
 

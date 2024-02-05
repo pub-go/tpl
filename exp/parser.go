@@ -1,9 +1,7 @@
 package exp
 
 import (
-	"fmt"
-	"strings"
-
+	"code.gopub.tech/errors"
 	"code.gopub.tech/tpl/exp/parser"
 	"github.com/antlr4-go/antlr/v4"
 )
@@ -16,12 +14,15 @@ func ParseCode(input string, opts ...parseCodeOpt) (tree parser.IExpressionConte
 	for _, f := range opts {
 		f(opt)
 	}
+	// 收集错误
 	errListener := NewErrorListener(opt.start)
 
+	// 词法分析
 	lexer := parser.NewGoLexer(antlr.NewInputStream(input))
 	lexer.RemoveErrorListeners()
 	lexer.AddErrorListener(errListener)
 
+	// 语法分析
 	p := parser.NewGoExpression(antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel))
 	p.RemoveErrorListeners()
 	p.AddErrorListener(errListener)
@@ -42,7 +43,7 @@ func WithStartPos(pos Pos) parseCodeOpt {
 type errorListener struct {
 	*antlr.DefaultErrorListener
 	start  Pos
-	errors []string
+	errors []error
 }
 
 // NewErrorListener 新建词法/语法分析错误监听器
@@ -52,10 +53,7 @@ func NewErrorListener(start Pos) *errorListener {
 
 // Err 获取词法/语法错误
 func (e *errorListener) Err() error {
-	if len(e.errors) > 0 {
-		return fmt.Errorf("compile error: %s", strings.Join(e.errors, "; "))
-	}
-	return nil
+	return errors.Join(e.errors...)
 }
 
 // SyntaxError implements antlr.ErrorListener.
@@ -64,6 +62,6 @@ func (e *errorListener) SyntaxError(recognizer antlr.Recognizer,
 	offendingSymbol interface{}, line int, column int,
 	msg string, ex antlr.RecognitionException) {
 	// 语法错误
-	e.errors = append(e.errors, fmt.Sprintf("[SyntaxError] %v (position: %v)",
+	e.errors = append(e.errors, errors.Errorf("[SyntaxError] %v (position: %v)",
 		msg, e.start.Add(line, column)))
 }
