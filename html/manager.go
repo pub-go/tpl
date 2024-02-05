@@ -152,12 +152,12 @@ func (m *tplManager) Add(fileName string, reader io.Reader) error {
 		SetAttrPrefix(m.attrPrefix)
 	tokens, err := tz.GetAllTokens()
 	if err != nil {
-		return errors.Errorf("failed to read html tokens: %w", err)
+		return errors.Errorf("failed to read html tokens in template `%v`: %w", fileName, err)
 	}
 	p := NewParser().SetVoidElements(m.voidElements)
 	tree, err := p.ParseTokens(tokens)
 	if err != nil {
-		return errors.Errorf("failed to parse html tokens: %w", err)
+		return errors.Errorf("failed to parse html tokens in template `%v`: %w", fileName, err)
 	}
 	m.files[fileName] = tree
 	m.templates[fileName] = tree

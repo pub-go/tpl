@@ -433,10 +433,10 @@ func (t *HtmlScanner) readTag() (tok *Token, err error) {
 						ValueEnd:   attrValueEnd,
 					}
 					if err := t.compileAttr(attr); err != nil {
-						return nil, t.Err("compile attr failed: %v. cause: %w", attr, err)
+						return nil, t.Err("compile attr failed `%v`: %w", attr, err)
 					}
 					if err := tag.AddAttr(attr); err != nil {
-						return nil, t.Err("scan attr failed: %v. cause: %w", attr, err)
+						return nil, t.Err("scan attr failed `%v`: %w", attr, err)
 					}
 					// 去消耗掉连续的空白
 					t.state = stateTagSpace

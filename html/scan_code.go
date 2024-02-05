@@ -239,7 +239,7 @@ func (t *CodeScanner) scanCode() (*CodeToken, error) {
 					End:   end,
 				}
 				if err := compile(tok); err != nil {
-					return nil, t.Err("invalid code: %w", err)
+					return nil, t.Err("invalid code `%v`: %w", tok, err)
 				}
 				return t.addToken(tok), nil
 			}
