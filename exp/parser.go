@@ -34,8 +34,8 @@ func ParseCode(input string, opts ...parseCodeOpt) (tree parser.IExpressionConte
 
 	tree = p.Expression()
 	index := stream.Index()
-	last := stream.Get(index)
-	if last.GetTokenType() != antlr.TokenEOF {
+	last := stream.Get(index).GetTokenType()
+	if last != antlr.TokenEOF && last != parser.GoLexerEOS {
 		err = errors.Wrapf(ErrInputTooLong, "at index=%v token=%v", index, last)
 		errListener.errors = append(errListener.errors, err)
 	}

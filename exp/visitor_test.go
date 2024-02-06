@@ -963,10 +963,14 @@ func TestNewVisitor(t *testing.T) {
 	ot.Logf("result=%v, err=%v", result, err)
 }
 
-func TestExp(t *testing.T) {
+func TestInputTooLong(t *testing.T) {
 	tree, err := exp.ParseCode(`1=`)
 	if !errors.Is(err, exp.ErrInputTooLong) {
 		t.Errorf("want ErrInputTooLong got %+v", err)
 	}
+	t.Logf("tree=%v, err=%+v", exp.TreesToString(tree), err)
+	tree, err = exp.ParseCode("1\n")
+	t.Logf("tree=%v, err=%+v", exp.TreesToString(tree), err)
+	tree, err = exp.ParseCode("1")
 	t.Logf("tree=%v, err=%+v", exp.TreesToString(tree), err)
 }
