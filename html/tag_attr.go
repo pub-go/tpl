@@ -63,10 +63,13 @@ func (a *Attr) WithAssign(input exp.Scope) (map[string]any, error) {
 	for _, tok := range a.ValueTokens {
 		switch tok.Kind {
 		case Literal:
+			name := strings.TrimSpace(tok.Value)
+			if name == "" {
+				continue
+			}
 			if len(codes) > len(names) {
 				return nil, errors.Errorf("mismatch variable name and code block")
 			}
-			name := strings.TrimSpace(tok.Value)
 			if !strings.HasSuffix(name, ":=") {
 				return nil, errors.Errorf("an assignment symbol(:=) should be after the variable(`%v`)", name)
 			}
@@ -80,6 +83,8 @@ func (a *Attr) WithAssign(input exp.Scope) (map[string]any, error) {
 					return nil, errors.Errorf("semicolon(;) required between variables(`%v`)", name)
 				}
 				name = strings.TrimPrefix(name, ";")
+				// :with="a := ${1} ; b := ${2}"
+				name = strings.TrimSpace(name)
 			}
 			names = append(names, name)
 		case CodeValue:

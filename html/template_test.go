@@ -57,7 +57,7 @@ func TestWith(t *testing.T) {
 			want:  `<span>1</span>`,
 		},
 		{
-			input: `<t:block :with="a:=${1};b:=${2}"><span :text="${a+b}"></span></t:block>`,
+			input: `<t:block :with=" a := ${1} ; b := ${2} "><span :text="${a+b}"></span></t:block>`,
 			data:  map[string]any{},
 			want:  `<span>3</span>`,
 		},
