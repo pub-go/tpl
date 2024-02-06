@@ -48,6 +48,9 @@ func EmptyScope() Scope { return NewScope(map[string]any{}) }
 
 // NewScope 从结构体/map/数组/切片新建作用域
 func NewScope(data any) Scope {
+	if data == nil {
+		data = map[string]any{}
+	}
 	return &scope{data: data}
 }
 

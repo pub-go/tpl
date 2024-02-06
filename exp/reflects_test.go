@@ -3,6 +3,7 @@ package exp
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 type Foo struct {
@@ -133,6 +134,52 @@ func Test_getValue(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("getValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+type Bar string
+
+func (e Bar) Str() string    { return string(e) }
+func (e *Bar) Error() string { return string(*e) }
+
+func TestMethod(t *testing.T) {
+	bar := Bar("bar")
+	pbar := &bar
+	rv := reflect.ValueOf(bar)
+	prv := reflect.ValueOf(pbar)
+	t.Logf("bar kind: %v, Error=%v, %v", rv.Kind(), rv.MethodByName("Error"), bar.Error())
+	t.Logf("pbar kind: %v, Str=%v", prv.Kind(), prv.MethodByName("Str"))
+	tests := []struct {
+		obj   any
+		fn    string
+		found bool
+		want  any
+	}{
+		{obj: time.Nanosecond, fn: "Nanoseconds", found: true, want: int64(1)},
+		{obj: bar, fn: "Str", found: true, want: "bar"},
+		{obj: bar, fn: "Error", found: false},
+		{obj: pbar, fn: "Str", found: true, want: "bar"},
+		{obj: pbar, fn: "Error", found: true, want: "bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			val, err := getValue(tt.fn, tt.obj)
+			if err != nil && tt.found {
+				t.Errorf("getValue err=%+v", err)
+			}
+			if !tt.found {
+				return
+			}
+			out, err := callFunc(reflect.ValueOf(val), nil)
+			if err != nil {
+				t.Errorf("call err=%+v", err)
+			}
+			result := out[0].Interface()
+			if !reflect.DeepEqual(result, tt.want) {
+				t.Errorf("got=%v, want=%v", result, tt.want)
 			}
 		})
 	}

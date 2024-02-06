@@ -3,7 +3,7 @@ module code.gopub.tech/tpl
 go 1.18
 
 require (
-	code.gopub.tech/errors v0.0.2
+	code.gopub.tech/errors v0.0.3
 	code.gopub.tech/logs v0.0.5
 	github.com/antlr4-go/antlr/v4 v4.13.0
 )

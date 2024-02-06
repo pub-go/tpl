@@ -1,6 +1,9 @@
 package exp
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 func ToString(a any) string {
 	switch i := a.(type) {
@@ -24,7 +27,7 @@ func ToBytes(a any) (s []byte) {
 	case []byte:
 		return []byte(i)
 	}
-	panic(fmt.Sprintf("cannot convert %T(%v) to []byte", a, a))
+	return ReflectConvert[[]byte](a)
 }
 
 func ToRunes(a any) (s []rune) {
@@ -34,7 +37,7 @@ func ToRunes(a any) (s []rune) {
 	case []rune:
 		return []rune(i)
 	}
-	panic(fmt.Sprintf("cannot convert %T(%v) to []rune", a, a))
+	return ReflectConvert[[]rune](a)
 }
 
 func ToNumber[T Integer | Float](a any) (n T) {
@@ -64,7 +67,16 @@ func ToNumber[T Integer | Float](a any) (n T) {
 	case float64:
 		return T(i)
 	}
-	panic(fmt.Sprintf("cannot convert %T(%v) to %T", a, a, n))
+	return ReflectConvert[T](a)
+}
+
+func ReflectConvert[T any](from any) (to T) {
+	rt := reflect.TypeOf(to)
+	rv := reflect.ValueOf(from)
+	if rv.CanConvert(rt) {
+		return rv.Convert(rt).Interface().(T)
+	}
+	panic(fmt.Sprintf("cannot convert %T(%v) to %T", from, from, to))
 }
 
 type (

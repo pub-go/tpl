@@ -52,45 +52,62 @@ func (a *Attr) Evaluate(input exp.Scope) (string, error) {
 }
 
 // WithAssign 解析 :with="name := ${value}" 赋值属性 返回解析后的变量名，变量值
-func (a *Attr) WithAssign(input exp.Scope) (string, any, error) {
+// :with="name := ${value} ; b:=${1}"
+func (a *Attr) WithAssign(input exp.Scope) (map[string]any, error) {
 	if a.Value == nil {
-		return "", nil, errors.Errorf(attrShouldHaveValue+": %w",
+		return nil, errors.Errorf(attrShouldHaveValue+": %w",
 			a.Name, a.NameEnd, ErrAttrValueExpected)
 	}
-	var name string
+	var names []string
 	var codes []*CodeToken
 	for _, tok := range a.ValueTokens {
 		switch tok.Kind {
 		case Literal:
-			if name != "" { // 多个变量暂不支持
-				return "", nil, errors.Errorf("only support one variable, already found `%v`, got `%v`", name, tok.Value)
+			if len(codes) > len(names) {
+				return nil, errors.Errorf("mismatch variable name and code block")
 			}
-			if len(codes) > 0 { // 先出现了代码 :with="${xxx}abc" 是异常情况
-				return "", nil, errors.Errorf("variable name should not be after the code block", name)
-			}
-			name = strings.TrimSpace(tok.Value)
+			name := strings.TrimSpace(tok.Value)
 			if !strings.HasSuffix(name, ":=") {
-				return "", nil, errors.Errorf("an assignment symbol(:=) should be after the name(`%v`)", name)
+				return nil, errors.Errorf("an assignment symbol(:=) should be after the variable(`%v`)", name)
 			}
 			name = strings.TrimSpace(strings.TrimSuffix(name, ":="))
-
+			if len(names) > 0 {
+				// :with="name := ${value}b:=${1}"
+				// :with="name := ${value} b:=${1}"
+				// :with="name := ${value},b:=${1}"
+				// :with="name := ${value};b:=${1}"
+				if !strings.HasPrefix(name, ";") {
+					return nil, errors.Errorf("semicolon(;) required between variables(`%v`)", name)
+				}
+				name = strings.TrimPrefix(name, ";")
+			}
+			names = append(names, name)
 		case CodeValue:
-			if name == "" {
-				return "", nil, errors.Errorf("no variable name found before the code block: %v", tok)
+			if len(names) != len(codes)+1 {
+				return nil, errors.Errorf("no variable name found before the code block: %v", tok)
 			}
 			codes = append(codes, tok)
 		}
 	}
 
-	if len(codes) == 0 {
-		return "", nil, errors.Errorf("code block(`${}`) not found: %v", a)
+	count := len(names)
+	if count == 0 {
+		return nil, errors.Errorf("variables not found: %v", a)
 	}
-	if len(codes) != 1 {
-		return "", nil, errors.Errorf("too much code block(`${}`) found in `with` attr: %v", a)
+	if len(codes) != count {
+		return nil, errors.Errorf("too much code block(`${}`) found in `with` attr: %v", a)
 	}
-	tok := codes[0]
-	result, err := exp.Evaluate(tok.Start, tok.Tree, input)
-	return name, result, err
+	m := make(map[string]any, count)
+	for i := 0; i < count; i++ {
+		name := names[i]
+		tok := codes[i]
+		result, err := exp.Evaluate(tok.Start, tok.Tree, input)
+		if err != nil {
+			return nil, errors.Wrapf(err, "evaluate variable `%v` value failed: ```%v``` at %v", name, tok.Value, tok.Start)
+		}
+		m[name] = result
+	}
+	return m, nil
 }
 
 // String 打印输出 不保证格式 debug only

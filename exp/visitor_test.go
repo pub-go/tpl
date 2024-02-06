@@ -54,6 +54,14 @@ func TestNewVisitor(t *testing.T) {
 				wantErr: false,
 			},
 			{
+				name: "simple-bool",
+				args: args{
+					input: `true`,
+				},
+				want:    true,
+				wantErr: false,
+			},
+			{
 				name: "simple-literal-int",
 				args: args{
 					input: `0o_1_0`,
@@ -924,6 +932,7 @@ func TestNewVisitor(t *testing.T) {
 			},
 		},
 	}
+	ot := t
 	for _, tts := range tests {
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
@@ -948,6 +957,10 @@ func TestNewVisitor(t *testing.T) {
 			})
 		}
 	}
+	tree, _ := exp.ParseCode(`+false`)
+	v := exp.NewVisitor(exp.NewPos(1, 1), exp.NewScope(nil))
+	result, err := v.Evaluate(tree)
+	ot.Logf("result=%v, err=%v", result, err)
 }
 
 func TestExp(t *testing.T) {

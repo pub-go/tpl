@@ -186,11 +186,11 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 			cmd := strings.TrimPrefix(an, attrPrefix)
 			switch cmd {
 			case attrWith: // 赋值
-				name, result, err := attr.WithAssign(data)
+				result, err := attr.WithAssign(data)
 				if err != nil {
 					return data, err
 				}
-				data = exp.Combine(exp.NewScope(map[string]any{name: result}), data)
+				data = exp.Combine(exp.NewScope(result), data)
 			case attrIf, attrElse_If, attrElseIf, attrElIf, attrElse: // 条件控制
 				if err := t.processIfElse(node, attr, tokenBuf, data, opt); err != nil {
 					return data, err

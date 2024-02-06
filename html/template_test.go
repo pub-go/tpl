@@ -56,6 +56,11 @@ func TestWith(t *testing.T) {
 			data:  map[string]any{},
 			want:  `<span>1</span>`,
 		},
+		{
+			input: `<t:block :with="a:=${1};b:=${2}"><span :text="${a+b}"></span></t:block>`,
+			data:  map[string]any{},
+			want:  `<span>3</span>`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {

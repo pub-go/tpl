@@ -23,28 +23,28 @@ func getValue(name string, from any) (value any, err error) {
 			err = errors.Errorf("cannot get `%v` from `%T`: %v", name, from, x)
 		}
 	}()
+
+	if from == nil {
+		return nil, errors.Wrapf(ErrNoSuchValue, "can not get `%s` from nil", name)
+	}
+
+	// type definition 用“类型定义”定义的新类型上 可以定义方法
+	// type time.Duration int64
+	// func (d Duration) Nanoseconds() int64 { return int64(d) }
 	rv := reflect.ValueOf(from)
-	prv := rv
-	isPtr := false
+	method := rv.MethodByName(name)
+	if !isZero(method) {
+		return method.Interface(), nil
+	}
+
 	if rv.Kind() == reflect.Pointer {
-		isPtr = true
 		rv = rv.Elem()
 	}
 	switch rv.Kind() {
 	case reflect.Struct:
 		value := rv.FieldByName(name)
 		if isZero(value) { // 无字段
-			value = rv.MethodByName(name)
-			if isZero(value) { // 无值方法
-				if isPtr {
-					value = prv.MethodByName(name)
-					if isZero(value) { // 无指针方法
-						return nil, errors.Errorf("field not found `%v` in *%v: %w", name, rv.Type(), ErrNoSuchValue)
-					}
-				} else {
-					return nil, errors.Errorf("field not found `%v` in %v: %w", name, rv.Type(), ErrNoSuchValue)
-				}
-			}
+			return nil, errors.Errorf("field not found `%v` in %v: %w", name, rv.Type(), ErrNoSuchValue)
 		}
 		return value.Interface(), nil
 	case reflect.Map:
