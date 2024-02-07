@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+func IsNil(a any) bool   { return a == nil }
+func NotNil(a any) bool  { return a != nil }
+func IsNull(a any) bool  { return a == nil || reflect.ValueOf(a).IsNil() }
+func NotNull(a any) bool { return a != nil && !reflect.ValueOf(a).IsNil() }
+
 var defaultScope = NewScope(map[string]any{
 	"true":     true,
 	"false":    false,
@@ -26,8 +31,10 @@ var defaultScope = NewScope(map[string]any{
 	"float32":  ToNumber[float32],
 	"float64":  ToNumber[float64],
 	"duration": func(a any) time.Duration { return time.Duration(ToNumber[int64](a)) },
-	"isNil":    func(a any) bool { return a == nil },
-	"isNull":   func(a any) bool { return reflect.ValueOf(a).IsNil() },
+	"isNil":    IsNil,
+	"notNil":   NotNil,
+	"isNull":   IsNull,
+	"notNull":  NotNull,
 	"len":      func(a any) int { return reflect.ValueOf(a).Len() },
 	"cap":      func(a any) int { return reflect.ValueOf(a).Cap() },
 	"print":    func(args ...any) string { return fmt.Sprint(args...) },
