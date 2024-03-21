@@ -5,6 +5,7 @@ import (
 	"html"
 	"io"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"code.gopub.tech/errors"
@@ -14,13 +15,29 @@ import (
 
 var _ types.Template = (*htmlTemplate)(nil)
 
+const (
+	// 正在处理的属性是 条件属性 if, else-if, else 等
+	currentIsCond = 1 << iota
+	// 正在处理的属性是 range
+	currentIsRange
+)
+
 // htmlTemplate HTML 模板实例
 type htmlTemplate struct {
-	manager       *tplManager
-	name          string
-	node          *Node
-	currentAttrs  map[*Node]int
+	manager *tplManager
+	name    string
+	node    *Node
+	// 当前正在处理的属性
+	// currentIsCond 条件属性，如 if, else
+	// currentIsRange 循环属性 range
+	currentAttrs map[*Node]int
+	// 条件节点求值结果
 	nodeCondition map[*Node]bool
+	// 节点层级深度
+	// rootDoc           -2
+	//  <!DOCTYPE html>  -1
+	//   <html>          0
+	nodeDepth map[*Node]int
 }
 
 // NewTemplate 构造一个模板实例
@@ -31,15 +48,9 @@ func NewTemplate(m *tplManager, name string, node *Node) *htmlTemplate {
 		node:          node,
 		currentAttrs:  map[*Node]int{},
 		nodeCondition: map[*Node]bool{},
+		nodeDepth:     map[*Node]int{},
 	}
 }
-
-const (
-	// 正在处理的属性是 条件属性 if, else-if, else 等
-	currentIsCond = 1 << iota
-	// 正在处理的属性是 range
-	currentIsRange
-)
 
 // Execute implements types.Template. 执行模板
 func (t *htmlTemplate) Execute(w io.Writer, data any) error {
@@ -50,6 +61,7 @@ func (t *htmlTemplate) Execute(w io.Writer, data any) error {
 
 // executeOption 执行模板的参数
 type executeOption struct {
+	depth        int
 	noPrintToken bool // 不输出 tag 本身
 	processChild func(w io.Writer) error
 }
@@ -57,7 +69,31 @@ type executeOption struct {
 // nop 什么都不做
 func nop(w io.Writer) error { return nil }
 
-// execute 执行节点
+func (t *htmlTemplate) getNodeDepth(node *Node) int {
+	depth, ok := t.nodeDepth[node]
+	if !ok {
+		if node.Parent == nil {
+			depth = -2 // root(-2) -> DOCTYPE(-1) -> html(0)
+		} else {
+			depth = t.nodeDepth[node.Parent] + 1
+		}
+		t.nodeDepth[node] = depth
+	}
+	if t.manager.maxIndent > 0 {
+		depth = depth % t.manager.maxIndent
+	} else {
+		depth = 0
+	}
+	return depth
+}
+
+var replacer = regexp.MustCompile(`(\n+)([^\S\n]*)`)
+
+// execute 执行一个节点
+//
+// - tag 节点：输出tag标签、递归处理子内容、输出结束标签(如有)
+// - 注释节点：输出普通注释，忽略后端注释 <!--/*xxx*/-->
+// - 文本节点：输出文本
 func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *executeOption) (err error) {
 	if tree == nil {
 		return nil
@@ -66,11 +102,13 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 		opt = &executeOption{}
 	}
 
-	// 开始标签
 	var (
 		token    = tree.Token         // <p>child</p> ==> <p>是token, child 是子节点, </p> 是End
 		tokenBuf = &strings.Builder{} // 开始标签缓冲区
 	)
+
+	opt.depth = t.getNodeDepth(tree)
+
 	if token != nil { // root doc is nil
 		switch token.Kind {
 		case TokenKindTag: // tag 标签
@@ -89,7 +127,32 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 			}
 			writeToBuf(opt, tokenBuf, token.Value)
 		default: // text, cdata
-			writeToBuf(opt, tokenBuf, token.Value)
+			value := token.Value
+			if depth := opt.depth; depth > 0 {
+				indent := t.manager.GetIndent(depth)               // 文本内容需要缩进的深度
+				v := replacer.ReplaceAllString(value, "$1"+indent) // 将换行+空白替换为换行+缩进
+				v = strings.TrimRight(v, indent)                   // 去掉最后一个缩进
+				value = v                                          // 输出文本
+
+				if strings.HasSuffix(v, "\n") { // 如果有换行记录一下
+					// 输出标签时会补上缩进
+					if next := tree.GetNextSibling(); next != nil {
+						// <html>text node
+						// -><head>
+						// 下一个兄弟节点如果是 tag 标签 需要缩进
+						next.openIndent = true
+					}
+					if tree == tree.Parent.GetLastChild() {
+						// -><span>text node
+						// -></span> endIndent=true
+						// 最后一个文本节点输出完成了
+						// 父节点的闭合标签需要缩进
+						tree.Parent.endIndent = true
+					}
+
+				}
+			}
+			writeToBuf(opt, tokenBuf, value)
 		}
 	}
 	if _, err := w.Write([]byte(tokenBuf.String())); err != nil {
@@ -113,7 +176,11 @@ func (t *htmlTemplate) execute(tree *Node, w io.Writer, data exp.Scope, opt *exe
 
 	// 结束标签
 	if token = tree.End; token != nil && !opt.noPrintToken {
-		_, err := w.Write([]byte(token.Value))
+		value := token.Value
+		if tree.endIndent {
+			value = t.manager.GetIndent(opt.depth) + value
+		}
+		_, err = w.Write([]byte(value))
 		if err != nil {
 			return err
 		}
@@ -170,6 +237,11 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 
 	// tagBuf 缓冲 tag 本身输出 <tagName attrName=value>
 	var tagBuf = &strings.Builder{}
+	if opt.depth > 0 {
+		if node.openIndent {
+			writeToBuf(opt, tagBuf, t.manager.GetIndent(opt.depth))
+		}
+	}
 	writeToBuf(opt, tagBuf, "<"+tag.Name)
 
 	// tagContentBuf
@@ -206,14 +278,23 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 					continue
 				}
 				opt.processChild = func(w io.Writer) error {
-					result, err := attr.Evaluate(data)
+					value, err := attr.Evaluate(data)
 					if err != nil {
 						return err
 					}
 					if cmd == "text" {
-						result = html.EscapeString(result)
+						value = html.EscapeString(value)
 					}
-					_, err = w.Write([]byte(result))
+					if depth := opt.depth; depth > 0 {
+						indent := t.manager.GetIndent(depth + 1)           // 文本内容需要缩进的深度
+						v := replacer.ReplaceAllString(value, "$1"+indent) // 将换行+空白替换为换行+缩进
+						v = strings.TrimRight(v, indent)                   // 去掉最后一个缩进
+						value = v
+						if strings.HasSuffix(v, "\n") {
+							node.endIndent = true
+						}
+					}
+					_, err = w.Write([]byte(value))
 					return err
 				}
 			case attrDefine: // 定义可复用组件 解析模板时已经处理 这里无需处理

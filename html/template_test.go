@@ -1,6 +1,7 @@
 package html
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -86,4 +87,47 @@ func TestWith(t *testing.T) {
 		})
 	}
 
+}
+
+func TestIdent(t *testing.T) {
+	tz := NewHtmlScanner(strings.NewReader(`<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+ <div>前后不换行</div>
+ <div> ok </div>
+ <pre>
+前面
+ 换行</pre>
+ <pre>xxx
+ xxx
+ </pre>
+ <div>后面换行
+</div>
+<div><p>
+ppp<span :text='${"a\nb\nc\n"}'></span>
+多个
+换行
+
+ </p></div>
+</body>
+</html>`))
+	tokes, err := tz.GetAllTokens()
+	if err != nil {
+		t.Errorf("scanner err: %+v", err)
+	}
+	tree, err := NewParser().ParseTokens(tokes)
+	if err != nil {
+		t.Errorf("parser err: %+v", err)
+	}
+	// t.Logf("%# v", pretty.Formatter(tree))
+	m := NewTplManager()
+	m.maxIndent = 10
+	tpl := NewTemplate(m, "index.html", tree)
+	var sb strings.Builder
+	err = tpl.Execute(&sb, nil)
+	if err != nil {
+		t.Errorf("execute err: %+v", err)
+	}
+	fmt.Printf("%v\n", sb.String())
 }

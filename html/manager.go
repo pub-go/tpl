@@ -29,6 +29,8 @@ type tplManager struct {
 	voidElements []string
 	tagPrefix    string
 	attrPrefix   string
+	indent       string // 缩进字符串 默认="\t"
+	maxIndent    int    // 最大缩进层级 默认0=不开启/按原样
 	globalScope  exp.Scope
 	files        map[string]*Node
 	templates    map[string]*Node
@@ -44,6 +46,7 @@ func NewTplManager() *tplManager {
 		SetVoidElements(GetDefaultVoidElements()).
 		SetTagPrefix(DefaultTagPrefix).
 		SetAttrPrefix(DefaultAttrPrefix).
+		SetIdent("\t").
 		SetGlobalScope(exp.EmptyScope())
 }
 
@@ -89,6 +92,30 @@ func (m *tplManager) SetAttrPrefix(prefix string) *tplManager {
 		m.attrPrefix = prefix
 	}
 	return m
+}
+
+// SetIdent 设置缩进字符串
+// @param s 缩进字符串
+func (m *tplManager) SetIdent(s string) *tplManager {
+	m.indent = s
+	return m
+}
+
+// SetMaxIndent 设置最大缩进层级
+// @param i 最大缩进层级
+func (m *tplManager) SetMaxIndent(i int) *tplManager {
+	m.maxIndent = i
+	return m
+}
+
+// GetIndent 生成缩进字符串
+// @param depth 缩进层级
+func (m *tplManager) GetIndent(depth int) string {
+	if m.maxIndent > 0 {
+		depth = depth % m.maxIndent
+		return strings.Repeat(m.indent, depth)
+	}
+	return ""
 }
 
 // SetGlobalScope 设置全局的作用域 比如可以注入一些工具函数等

@@ -10,6 +10,7 @@ import (
 
 func TestNewHtmlTemplate(t *testing.T) {
 	m := NewTplManager()
+	m.maxIndent=5
 	err := m.Parse(os.DirFS("../testdata/"), func(path string) bool { return strings.HasSuffix(path, ".tpl.html") })
 	if err != nil {
 		t.Fatalf("error: %v", err)

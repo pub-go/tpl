@@ -10,7 +10,10 @@
 
 <body>
     <template :define="foo">
-        <p>blabla<span :if="${incrAndGet()%2==0}" :text="${get()}"></span><b :else :text="${get()}"></b></p>
+        <p>blabla
+            <span :if="${incrAndGet()%2==0}" :text="${get()}"></span>
+            <b :else :text="${get()}"></b>
+        </p>
     </template>
     <header>
         <h1 title="属性的标题

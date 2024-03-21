@@ -2,10 +2,12 @@ package html
 
 // Node 文档树节点
 type Node struct {
-	Token    *Token  // 节点内容
-	End      *Token  // 结束标签(如有)
-	Parent   *Node   // 父节点
-	Children []*Node // 子节点
+	Token      *Token // 节点内容
+	End        *Token // 结束标签(如有)
+	openIndent bool
+	endIndent  bool
+	Parent     *Node   // 父节点
+	Children   []*Node // 子节点
 }
 
 // IsBlankText 当前节点是否是空白文本
@@ -28,6 +30,13 @@ func (n *Node) GetPreviousSibling() (pre *Node) {
 			break
 		}
 		p = child
+	}
+	return
+}
+
+func (n *Node) GetLastChild() (node *Node) {
+	if len(n.Children) > 0 {
+		return n.Children[len(n.Children)-1]
 	}
 	return
 }
