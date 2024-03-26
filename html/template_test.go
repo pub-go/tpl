@@ -61,6 +61,22 @@ func TestWith(t *testing.T) {
 			data:  map[string]any{},
 			want:  `<span>3</span>`,
 		},
+		{
+			input: `<ul :remove="all-but-first">
+			<li :range="i, item : resp.Items" :text="${i}${item}"></li>
+			<li>Remove</li>
+			</ul>`,
+			data: map[string]any{
+				"resp": map[string]any{
+					"Items": []any{"A", "B", "C"},
+				},
+			},
+			want: `<ul>
+			<li>1A</li>
+			<li>2B</li>
+			<li>3C</li>
+			</ul>`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {

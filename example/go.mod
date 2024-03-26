@@ -25,6 +25,7 @@ require (
 )
 
 require (
+	code.gopub.tech/errors v0.0.3 // indirect
 	github.com/Xuanwo/go-locale v1.1.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect

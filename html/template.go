@@ -196,7 +196,7 @@ func (t *htmlTemplate) processTagStart(node *Node, tokenBuf *strings.Builder,
 					return data, err
 				}
 			case attrRange: // 循环
-				if err := t.processRange(node, attr, tokenBuf, data, opt); err != nil {
+				if err := t.processRange(node, attr, tokenBuf, data); err != nil {
 					return data, err
 				}
 			case attrRemove: // 移除
@@ -345,7 +345,7 @@ func (t *htmlTemplate) evaluateCondition(node *Node, attr *Attr, tokenBuf *strin
 }
 
 // processRange 处理 range 属性
-func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope, opt *executeOption) error {
+func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Builder, data exp.Scope) error {
 	an := attr.Name
 	av := attr.Value
 	if av == nil {
@@ -369,10 +369,27 @@ func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 		return errors.Errorf("invalid syntax %v [%v] (at position %v to %v): %w",
 			an, *av, attr.ValueStart, attr.ValueEnd, err)
 	}
-	scope := exp.WithDefaultScope(data)
-	obj, err := scope.Get(objName)
+
+	i := strings.Index(*av, ":")
+	if i > 0 {
+		i += attr.ValueStart.Column
+	} else {
+		i = attr.ValueStart.Column
+	}
+	tok := &CodeToken{
+		Kind:  CodeValue,
+		Start: (exp.Pos{Line: attr.ValueStart.Line, Column: i + 1}),
+		End:   attr.ValueEnd,
+		Value: objName,
+	}
+	err = compile(tok)
 	if err != nil {
-		return errors.Errorf("failed to process attribute `%v` at %v: %w", an, attr.ValueStart, err)
+		return errors.Wrapf(err, "invalid range object: `%s`", objName)
+	}
+	scope := exp.WithDefaultScope(data)
+	obj, err := exp.Evaluate(tok.Start, tok.Tree, scope)
+	if err != nil {
+		return errors.Wrapf(err, "range object not found: `%s`", objName)
 	}
 
 	var (
@@ -411,7 +428,7 @@ func (t *htmlTemplate) processRange(node *Node, attr *Attr, tokenBuf *strings.Bu
 
 	// <ul>
 	//   <li :range>当前 node 是这个</li>
-	//   <li>
+	//   <li>next</li>
 	// </ul>
 	// 处理 range 的 li 项目时，找到并输出 </li> 后的空白字符
 	var nextSiblingBlankTextNode = node.GetNextSibling()
